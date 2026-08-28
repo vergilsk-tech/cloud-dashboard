@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Cost Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.15);
+    --text: #0b0b0b;
+    --text-sec: #52514e;
+    --text-muted: #898781;
+    --accent: #2a78d6;
+    --accent-bg: #e6f1fb;
+    --accent-text: #0c447c;
+    --success: #1baf7a;
+    --success-bg: #e1f5ee;
+    --success-text: #085041;
+    --warning: #eda100;
+    --warning-bg: #faeeda;
+    --warning-text: #633806;
+    --danger: #e34948;
+    --danger-bg: #fcebeb;
+    --danger-text: #791f1f;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a19;
+      --surface: #242423;
+      --surface-2: #2c2c2a;
+      --border: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.15);
+      --text: #f0efec;
+      --text-sec: #c3c2b7;
+      --text-muted: #898781;
+      --accent-bg: #0c447c;
+      --accent-text: #b5d4f4;
+      --success-bg: #085041;
+      --success-text: #9fe1cb;
+      --warning-bg: #633806;
+      --warning-text: #fac775;
+      --danger-bg: #791f1f;
+      --danger-text: #f7c1c1;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* Layout */
+  .app-header { background: var(--surface); border-bottom: 0.5px solid var(--border-strong); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .app-header h1 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, #FF9900, #0078D4, #F80000); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 700; }
+  .app-body { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  /* Upload */
+  .upload-wrap { max-width: 640px; margin: 60px auto; }
+  .drop-zone { border: 1.5px dashed var(--border-strong); border-radius: 16px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all .2s; background: var(--surface); }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-bg); }
+  .upload-icon { font-size: 48px; margin-bottom: 16px; opacity: .4; }
+  .upload-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .upload-sub { color: var(--text-sec); margin-bottom: 20px; font-size: 13px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #1a68c6; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-link { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; }
+  .col-hints { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; }
+  .col-hint { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px; font-size: 11px; color: var(--text-sec); text-align: left; }
+  .col-hint strong { display: block; color: var(--text); font-size: 11px; margin-bottom: 3px; }
+
+  /* Dashboard top bar */
+  .dash-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .dash-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  select { padding: 6px 10px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 12px; }
+
+  /* KPI grid */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .kpi { background: var(--surface-2); border-radius: var(--radius); padding: 14px 16px; }
+  .kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .kpi-value { font-size: 22px; font-weight: 600; }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 0.5px solid var(--border-strong); margin-bottom: 16px; gap: 0; overflow-x: auto; }
+  .tab { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-sec); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 12px; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+  .charts-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 640px) { .charts-2col { grid-template-columns: 1fr; } .col-hints { grid-template-columns: 1fr; } }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-sec); margin-bottom: 10px; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .ldot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
+  .badge-aws { background: #FF990022; color: #7a4700; }
+  .badge-azure { background: #0078D422; color: #004a84; }
+  .badge-oci { background: #F8000022; color: #8b0000; }
+  .badge-multi { background: var(--accent-bg); color: var(--accent-text); }
+  .badge-critical { background: var(--danger-bg); color: var(--danger-text); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning-text); }
+  .badge-ok { background: var(--success-bg); color: var(--success-text); }
+  .badge-info { background: var(--accent-bg); color: var(--accent-text); }
+  @media (prefers-color-scheme: dark) {
+    .badge-aws { background: #FF990033; color: #fac775; }
+    .badge-azure { background: #0078D433; color: #85b7eb; }
+    .badge-oci { background: #F8000033; color: #f09595; }
+  }
+
+  /* Resource bars */
+  .res-bar-wrap { flex: 1; height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .res-bar { height: 5px; border-radius: 3px; }
+  .score-bar { width: 52px; height: 7px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .score-fill { height: 7px; border-radius: 3px; display: block; }
+
+  /* Drill panel */
+  .svc-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 8px; }
+  .svc-header { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .svc-header:hover { opacity: .85; }
+  .svc-meta { flex: 1; min-width: 0; }
+  .svc-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .svc-name { font-size: 14px; font-weight: 600; }
+  .svc-bar-row { display: flex; align-items: center; gap: 10px; }
+  .drill-panel { display: none; margin-top: 14px; padding-top: 14px; border-top: 0.5px solid var(--border); }
+  .drill-panel.open { display: block; }
+  .drill-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .drill-stat { background: var(--surface-2); border-radius: var(--radius); padding: 8px 12px; border: 0.5px solid var(--border); }
+  .drill-stat-label { font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+  .drill-stat-value { font-size: 16px; font-weight: 600; }
+  .drill-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+  th { text-align: left; font-weight: 600; color: var(--text-sec); border-bottom: 0.5px solid var(--border-strong); padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 8px 10px; border-bottom: 0.5px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface-2); }
+
+  /* Recommendations */
+  .savings-banner { background: var(--success-bg); border: 0.5px solid var(--success); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .savings-icon { font-size: 32px; }
+  .savings-body { flex: 1; }
+  .savings-label { font-size: 12px; color: var(--success-text); font-weight: 600; }
+  .savings-amount { font-size: 28px; font-weight: 700; color: var(--success-text); }
+  .savings-sub { font-size: 11px; color: var(--success-text); opacity: .8; }
+  .rec-item { border-left: 3px solid; padding: 12px 16px; margin-bottom: 8px; background: var(--surface); border-radius: 0 8px 8px 0; }
+  .rec-item.critical { border-left-color: var(--danger); }
+  .rec-item.warning { border-left-color: var(--warning); }
+  .rec-item.saving { border-left-color: var(--success); }
+  .rec-header { display: flex; align-items: flex-start; gap: 10px; }
+  .rec-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .rec-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .rec-desc { font-size: 12px; color: var(--text-sec); line-height: 1.6; }
+  .rec-footer { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .rec-saving-amt { font-size: 12px; color: var(--success); font-weight: 600; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+  .empty-icon { font-size: 40px; display: block; margin-bottom: 12px; opacity: .4; }
+  .chevron { font-size: 18px; color: var(--text-muted); transition: transform .2s; flex-shrink: 0; }
+  .chevron.open { transform: rotate(180deg); }
+
+  /* Footer */
+  .app-footer { text-align: center; padding: 32px 24px; color: var(--text-muted); font-size: 11px; border-top: 0.5px solid var(--border); margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>
+    <div class="logo-icon">☁</div>
+    Cloud Cost Dashboard
+  </h1>
+  <div id="header-controls" style="display:none; align-items:center; gap:8px; flex-wrap:wrap;">
+    <select id="filterCloud" onchange="renderAll()">
+      <option value="">Todas as clouds</option>
+      <option value="aws">AWS</option>
+      <option value="azure">Azure</option>
+      <option value="oci">OCI</option>
+    </select>
+    <select id="filterPeriod" onchange="renderAll()">
+      <option value="">Todo período</option>
+    </select>
+    <span id="cloud-badge" class="badge badge-multi" style="font-size:11px; padding:3px 8px;">Multi-cloud</span>
+    <button class="btn btn-sm" onclick="resetDashboard()">↩ Trocar arquivo</button>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- Upload Section -->
+  <div id="upload-section" class="upload-wrap">
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">☁</div>
+      <div class="upload-title">Arraste seu arquivo aqui</div>
+      <div class="upload-sub">CSV ou Excel (.xlsx) com dados de custos de AWS, Azure ou OCI</div>
+      <button class="btn btn-primary" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+        📂 Escolher arquivo
+      </button>
+      <div class="col-hints">
+        <div class="col-hint"><strong>Colunas básicas</strong>service, cost, date, cloud, region</div>
+        <div class="col-hint"><strong>Detalhes de instância</strong>instance_id, instance_type, cpu_avg, mem_avg</div>
+        <div class="col-hint"><strong>Storage / DB</strong>storage_gb, iops, tags, environment</div>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+    <div style="text-align:center; margin-top:12px;">
+      <button class="btn-link" onclick="loadDemo()">Carregar dados de demonstração →</button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" style="display:none">
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('overview')">📊 Visão geral</button>
+      <button class="tab" onclick="switchTab('resources')">🖥️ Recursos</button>
+      <button class="tab" onclick="switchTab('recommendations')">💡 Recomendações</button>
+      <button class="tab" onclick="switchTab('details')">📋 Detalhes</button>
+    </div>
+
+    <!-- Overview -->
+    <div id="tab-overview" class="tab-content active">
+      <div class="charts-2col">
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title">Top serviços por custo</div>
+          <div id="leg-svc" class="legend"></div>
+          <div style="position:relative;height:240px"><canvas id="chartSvc" role="img" aria-label="Top serviços por custo"></canvas></div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title">Distribuição por cloud</div>
+          <div id="leg-cloud" class="legend"></div>
+          <div style="position:relative;height:240px"><canvas id="chartCloud" role="img" aria-label="Distribuição por cloud"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Evolução de custo ao longo do tempo</div>
+        <div id="leg-time" class="legend"></div>
+        <div style="position:relative;height:220px"><canvas id="chartTime" role="img" aria-label="Evolução de custo"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Custo por região</div>
+        <div id="leg-reg" class="legend"></div>
+        <div style="position:relative;height:200px"><canvas id="chartReg" role="img" aria-label="Custo por região"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Resources -->
+    <div id="tab-resources" class="tab-content">
+      <div id="svc-list"></div>
+    </div>
+
+    <!-- Recommendations -->
+    <div id="tab-recommendations" class="tab-content">
+      <div id="rec-list"></div>
+    </div>
+
+    <!-- Details -->
+    <div id="tab-details" class="tab-content">
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:22%">Recurso / Serviço</th>
+              <th style="width:10%">Cloud</th>
+              <th style="width:13%">Região</th>
+              <th style="width:11%">Tipo</th>
+              <th style="width:10%">Custo</th>
+              <th style="width:10%">CPU %</th>
+              <th style="width:10%">Mem %</th>
+              <th style="width:14%">Status</th>
+            </tr></thead>
+            <tbody id="detailBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="app-footer">
+  Cloud Cost Dashboard · Dados processados localmente no seu navegador · Nenhum dado é enviado para servidores externos
+</footer>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let rawData = [], charts = {};
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const CLR = { aws:'#FF9900', azure:'#0078D4', oci:'#F80000' };
+const SER = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
+const fmt = n => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+const pct = n => (n||0).toFixed(1)+'%';
+
+// ─── Column aliases ───────────────────────────────────────────────────────────
+const ALIASES = {
+  service:     ['service','servico','serviço','servicename','service_name','produto','product','resource','recurso','resourcename','resourcetype'],
+  cost:        ['cost','custo','valor','value','amount','total','price','preco','preço','spend','billed','billedcost'],
+  date:        ['date','data','mes','mês','month','periodo','período','billing_period','billingperiod','usagestartdate'],
+  cloud:       ['cloud','provider','provedor','platform','plataforma','nuvem'],
+  region:      ['region','regiao','região','location','localizacao','localização','availabilityzone','az'],
+  instance_id: ['instance_id','instanceid','resource_id','resourceid','vm_id','vmid','id','resource_name','resourcename','instance_name','instancename','resourceid'],
+  instance_type:['instance_type','instancetype','vm_size','vmsize','sku','size','type','vm_type','instancetype','pricingmodel'],
+  cpu:         ['cpu_avg','cpu_average','cpu_utilization','cpu_percent','cpu','avg_cpu','utilization_cpu','cpuutilization','averagecpuutilization'],
+  mem:         ['mem_avg','memory_avg','memory_average','mem_utilization','memory_utilization','mem_percent','memory','ram','memoryutilization','averagememoryutilization'],
+  storage_gb:  ['storage_gb','storage','disk_gb','disk','size_gb','capacity_gb','allocated_gb','disksize'],
+  iops:        ['iops','read_iops','write_iops','disk_iops','diskiops'],
+  tags:        ['tags','tag','environment','env','owner','project','team','department']
+};
+
+function findCol(headers, aliases) {
+  const h = headers.map(x => x.toLowerCase().replace(/[^a-z0-9]/g,''));
+  for (const a of aliases) {
+    const clean = a.replace(/[^a-z0-9]/g,'');
+    const i = h.findIndex(x => x === clean || x.includes(clean) || clean.includes(x));
+    if (i >= 0) return headers[i];
+  }
+  return null;
+}
+
+function normalizeCloud(v) {
+  if (!v) return 'outro';
+  const s = v.toLowerCase();
+  if (s.includes('aws') || s.includes('amazon')) return 'aws';
+  if (s.includes('azure') || s.includes('microsoft')) return 'azure';
+  if (s.includes('oci') || s.includes('oracle')) return 'oci';
+  return s;
+}
+
+// ─── Parse ───────────────────────────────────────────────────────────────────
+function parseData(rows, headers) {
+  const cm = {};
+  for (const [k, a] of Object.entries(ALIASES)) cm[k] = findCol(headers, a);
+  return rows.filter(r => r && Object.values(r).some(v => v)).map(r => {
+    const cost = parseFloat(String(r[cm.cost]||0).replace(/[^0-9.-]/g,'')) || 0;
+    const cpu  = cm.cpu  ? parseFloat(r[cm.cpu])  || null : null;
+    const mem  = cm.mem  ? parseFloat(r[cm.mem])  || null : null;
+    const gb   = cm.storage_gb ? parseFloat(r[cm.storage_gb]) || null : null;
+    return {
+      service:       r[cm.service]       || 'Sem serviço',
+      cost, date:    r[cm.date]          || '',
+      cloud:         normalizeCloud(r[cm.cloud]),
+      region:        r[cm.region]        || 'Global',
+      instance_id:   cm.instance_id   ? r[cm.instance_id]   || null : null,
+      instance_type: cm.instance_type ? r[cm.instance_type] || null : null,
+      cpu, mem, storage_gb: gb,
+      iops: cm.iops ? parseFloat(r[cm.iops]) || null : null,
+      tags: cm.tags ? r[cm.tags] || null : null
+    };
+  }).filter(r => r.cost > 0);
+}
+
+// ─── Filters ─────────────────────────────────────────────────────────────────
+function getFiltered() {
+  const fc = document.getElementById('filterCloud').value;
+  const fp = document.getElementById('filterPeriod').value;
+  return rawData.filter(r => {
+    if (fc && r.cloud !== fc) return false;
+    if (fp && !r.date.includes(fp)) return false;
+    return true;
+  });
+}
+
+// ─── Render all ──────────────────────────────────────────────────────────────
+function renderAll() {
+  const data = getFiltered();
+  renderKPIs(data);
+  const activeTab = document.querySelector('.tab-content.active').id.replace('tab-','');
+  if (activeTab === 'overview')         renderOverview(data);
+  else if (activeTab === 'resources')   renderResources(data);
+  else if (activeTab === 'recommendations') renderRecommendations(data);
+  else if (activeTab === 'details')     renderDetails(data);
+}
+
+// ─── KPIs ────────────────────────────────────────────────────────────────────
+function renderKPIs(data) {
+  const total   = data.reduce((s,r) => s+r.cost, 0);
+  const clouds  = [...new Set(data.map(r => r.cloud))];
+  const svcAgg  = data.reduce((a,r) => { a[r.service]=(a[r.service]||0)+r.cost; return a; }, {});
+  const top     = Object.entries(svcAgg).sort((a,b) => b[1]-a[1])[0];
+  const withCpu = data.filter(r => r.cpu != null);
+  const avgCpu  = withCpu.length ? withCpu.reduce((s,r) => s+r.cpu,0)/withCpu.length : null;
+  const idle    = withCpu.filter(r => r.cpu < 10).length;
+  const regions = [...new Set(data.map(r => r.region))];
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Custo total</div>
+      <div class="kpi-value">${fmt(total)}</div>
+      <div class="kpi-sub">${data.length} registros</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Maior serviço</div>
+      <div class="kpi-value" style="font-size:15px;line-height:1.3">${top ? top[0] : '-'}</div>
+      <div class="kpi-sub">${top ? fmt(top[1]) + ' · ' + ((top[1]/total)*100).toFixed(0)+'%' : ''}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Clouds</div>
+      <div class="kpi-value">${clouds.length}</div>
+      <div class="kpi-sub">${clouds.join(', ')}</div>
+    </div>
+    ${avgCpu != null ? `
+    <div class="kpi">
+      <div class="kpi-label">CPU médio</div>
+      <div class="kpi-value" style="color:${avgCpu<20?'var(--danger)':'var(--text)'}">${pct(avgCpu)}</div>
+      <div class="kpi-sub">${idle} instância(s) ociosa(s)</div>
+    </div>` : ''}
+    <div class="kpi">
+      <div class="kpi-label">Regiões</div>
+      <div class="kpi-value">${regions.length}</div>
+      <div class="kpi-sub">ativas</div>
+    </div>
+  `;
+}
+
+// ─── Legend builder ───────────────────────────────────────────────────────────
+function buildLeg(id, labels, colors) {
+  document.getElementById(id).innerHTML = labels.slice(0,6).map((l,i) =>
+    `<span><span class="ldot" style="background:${colors[i%colors.length]}"></span>${l}</span>`
+  ).join('');
+}
+
+// ─── Overview charts ──────────────────────────────────────────────────────────
+function renderOverview(data) {
+  // Service bar
+  const svcAgg = data.reduce((a,r) => { a[r.service]=(a[r.service]||0)+r.cost; return a; }, {});
+  const topSvc = Object.entries(svcAgg).sort((a,b) => b[1]-a[1]).slice(0,8);
+  buildLeg('leg-svc', topSvc.map(e=>e[0]), SER);
+  if (charts.svc) charts.svc.destroy();
+  charts.svc = new Chart(document.getElementById('chartSvc'), {
+    type: 'bar',
+    data: { labels: topSvc.map(e=>e[0]), datasets: [{ data: topSvc.map(e=>Math.round(e[1])), backgroundColor: SER, borderRadius: 4, borderSkipped: false }] },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}} },
+      scales:{ x:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.15)'}}, y:{ticks:{color:'#898781',font:{size:11}},grid:{display:false}} }
+    }
+  });
+
+  // Cloud donut
+  const clAgg    = data.reduce((a,r) => { a[r.cloud]=(a[r.cloud]||0)+r.cost; return a; }, {});
+  const clLabels = Object.keys(clAgg), clVals = clLabels.map(k=>Math.round(clAgg[k]));
+  const clColors = clLabels.map(k => CLR[k]||SER[4]);
+  buildLeg('leg-cloud', clLabels.map((l,i)=>`${l.toUpperCase()} ${fmt(clVals[i])}`), clColors);
+  if (charts.cloud) charts.cloud.destroy();
+  charts.cloud = new Chart(document.getElementById('chartCloud'), {
+    type: 'doughnut',
+    data: { labels: clLabels, datasets: [{ data: clVals, backgroundColor: clColors, borderWidth: 0 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)}`}} }
+    }
+  });
+
+  // Time line
+  const timeAgg = {}, clSet = [...new Set(data.map(r=>r.cloud))];
+  data.forEach(r => { const p=r.date.slice(0,7)||'s/d'; if(!timeAgg[p]) timeAgg[p]={}; timeAgg[p][r.cloud]=(timeAgg[p][r.cloud]||0)+r.cost; });
+  const periods = Object.keys(timeAgg).sort();
+  buildLeg('leg-time', clSet, clSet.map(c=>CLR[c]||SER[0]));
+  if (charts.time) charts.time.destroy();
+  charts.time = new Chart(document.getElementById('chartTime'), {
+    type: 'line',
+    data: { labels: periods, datasets: clSet.map((c,i) => ({
+      label: c, data: periods.map(p=>Math.round(timeAgg[p][c]||0)),
+      borderColor: CLR[c]||SER[i], backgroundColor: (CLR[c]||SER[i])+'22',
+      tension:.3, fill:false, pointRadius:4, pointHoverRadius:6
+    }))},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{mode:'index',callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}} },
+      scales:{ x:{ticks:{color:'#898781',font:{size:10},maxRotation:30},grid:{display:false}}, y:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.15)'}} }
+    }
+  });
+
+  // Region bar
+  const regAgg = data.reduce((a,r) => { a[r.region]=(a[r.region]||0)+r.cost; return a; }, {});
+  const topReg = Object.entries(regAgg).sort((a,b) => b[1]-a[1]).slice(0,8);
+  buildLeg('leg-reg', topReg.map(e=>e[0]), SER);
+  if (charts.reg) charts.reg.destroy();
+  charts.reg = new Chart(document.getElementById('chartReg'), {
+    type: 'bar',
+    data: { labels: topReg.map(e=>e[0]), datasets: [{ data: topReg.map(e=>Math.round(e[1])), backgroundColor: SER, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}} },
+      scales:{ x:{ticks:{color:'#898781',font:{size:10},maxRotation:30},grid:{display:false}}, y:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.15)'}} }
+    }
+  });
+}
+
+// ─── Resources ────────────────────────────────────────────────────────────────
+function getStatus(r) {
+  if (r.cpu != null && r.cpu < 10)  return { cls:'badge-critical', label:'Ocioso' };
+  if (r.cpu != null && r.cpu < 30)  return { cls:'badge-warning',  label:'Subutilizado' };
+  if (r.mem != null && r.mem > 90)  return { cls:'badge-critical', label:'Mem alta' };
+  if (r.cpu != null && r.cpu > 85)  return { cls:'badge-warning',  label:'CPU alta' };
+  if (r.cpu != null)                 return { cls:'badge-ok',       label:'Saudável' };
+  return { cls:'badge-info', label:'Sem métrica' };
+}
+
+function buildResourceRows(items, hasCpu, hasMem) {
+  return items.sort((a,b) => b.cost-a.cost).slice(0,25).map(r => {
+    const st = getStatus(r);
+    const cpuBar = r.cpu != null
+      ? `<div style="display:flex;align-items:center;gap:5px">
+           <span class="score-bar"><span class="score-fill" style="width:${Math.min(100,r.cpu)}%;background:${r.cpu<10?'var(--danger)':r.cpu<30?'var(--warning)':'var(--success)'}"></span></span>
+           <span style="font-size:11px">${pct(r.cpu)}</span>
+         </div>` : '—';
+    const memBar = r.mem != null
+      ? `<div style="display:flex;align-items:center;gap:5px">
+           <span class="score-bar"><span class="score-fill" style="width:${Math.min(100,r.mem)}%;background:${r.mem>90?'var(--danger)':r.mem>70?'var(--warning)':'var(--success)'}"></span></span>
+           <span style="font-size:11px">${pct(r.mem)}</span>
+         </div>` : '—';
+    return `<tr>
+      <td title="${r.instance_id||r.service}">${r.instance_id||r.service}</td>
+      ${r.instance_type ? `<td>${r.instance_type}</td>` : ''}
+      <td>${r.region}</td>
+      <td style="font-weight:600">${fmt(r.cost)}</td>
+      ${hasCpu ? `<td>${cpuBar}</td>` : ''}
+      ${hasMem ? `<td>${memBar}</td>` : ''}
+      ${r.storage_gb ? `<td>${r.storage_gb} GB</td>` : ''}
+      <td><span class="badge ${st.cls}">${st.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderResources(data) {
+  const svcAgg = {};
+  data.forEach(r => {
+    if (!svcAgg[r.service]) svcAgg[r.service] = { cost:0, items:[], cloud:r.cloud };
+    svcAgg[r.service].cost += r.cost;
+    svcAgg[r.service].items.push(r);
+    if (r.cloud !== svcAgg[r.service].cloud) svcAgg[r.service].cloud = 'multi';
+  });
+  const total  = data.reduce((s,r) => s+r.cost, 0);
+  const sorted = Object.entries(svcAgg).sort((a,b) => b[1].cost-a[1].cost).slice(0,20);
+
+  let html = '';
+  sorted.forEach(([svc, agg], idx) => {
+    const share   = total > 0 ? ((agg.cost/total)*100).toFixed(1) : 0;
+    const barW    = Math.max(4, Math.min(100, (agg.cost/sorted[0][1].cost)*100));
+    const barCol  = SER[idx % SER.length];
+    const cbadge  = agg.cloud==='aws'?'badge-aws':agg.cloud==='azure'?'badge-azure':agg.cloud==='oci'?'badge-oci':'badge-multi';
+    const items   = agg.items;
+    const hasCpu  = items.some(r => r.cpu != null);
+    const hasMem  = items.some(r => r.mem != null);
+    const cpuArr  = items.filter(r => r.cpu != null);
+    const memArr  = items.filter(r => r.mem != null);
+    const avgCpu  = cpuArr.length ? (cpuArr.reduce((s,r)=>s+r.cpu,0)/cpuArr.length).toFixed(1) : null;
+    const avgMem  = memArr.length ? (memArr.reduce((s,r)=>s+r.mem,0)/memArr.length).toFixed(1) : null;
+    const idle    = cpuArr.filter(r => r.cpu < 10).length;
+    const under   = cpuArr.filter(r => r.cpu < 30).length;
+
+    let statusBadge = '';
+    if (hasCpu && parseFloat(avgCpu) < 15) statusBadge = '<span class="badge badge-critical">CPU crítico</span>';
+    else if (hasCpu && parseFloat(avgCpu) < 30) statusBadge = '<span class="badge badge-warning">Subutilizado</span>';
+    else if (hasCpu) statusBadge = '<span class="badge badge-ok">Saudável</span>';
+
+    html += `
+    <div class="svc-card">
+      <div class="svc-header" onclick="toggleDrill('drill-${idx}', 'chev-${idx}')">
+        <div class="svc-meta">
+          <div class="svc-name-row">
+            <span class="svc-name">${svc}</span>
+            <span class="badge ${cbadge}">${agg.cloud.toUpperCase()}</span>
+            ${statusBadge}
+          </div>
+          <div class="svc-bar-row">
+            <div class="res-bar-wrap"><div class="res-bar" style="width:${barW}%;background:${barCol}"></div></div>
+            <span style="font-size:13px;font-weight:600;white-space:nowrap">${fmt(agg.cost)}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${share}%</span>
+            ${hasCpu ? `<span style="font-size:11px;color:var(--text-sec)">CPU ${avgCpu}%</span>` : ''}
+            ${hasMem ? `<span style="font-size:11px;color:var(--text-sec)">Mem ${avgMem}%</span>` : ''}
+          </div>
+        </div>
+        <span class="chevron" id="chev-${idx}">⌄</span>
+      </div>
+      <div class="drill-panel" id="drill-${idx}">
+        <div class="drill-kpis">
+          <div class="drill-stat"><div class="drill-stat-label">Instâncias</div><div class="drill-stat-value">${items.length}</div></div>
+          ${hasCpu ? `<div class="drill-stat"><div class="drill-stat-label">CPU médio</div><div class="drill-stat-value" style="color:${parseFloat(avgCpu)<20?'var(--danger)':'var(--text)'}">${avgCpu}%</div></div>` : ''}
+          ${hasMem ? `<div class="drill-stat"><div class="drill-stat-label">Mem médio</div><div class="drill-stat-value">${avgMem}%</div></div>` : ''}
+          ${hasCpu ? `<div class="drill-stat"><div class="drill-stat-label">Ociosas (&lt;10%)</div><div class="drill-stat-value" style="color:${idle>0?'var(--danger)':'var(--text)'}">${idle}</div></div>` : ''}
+          ${hasCpu ? `<div class="drill-stat"><div class="drill-stat-label">Subutil. (&lt;30%)</div><div class="drill-stat-value" style="color:${under>0?'var(--warning)':'var(--text)'}">${under}</div></div>` : ''}
+          <div class="drill-stat"><div class="drill-stat-label">% do total</div><div class="drill-stat-value">${share}%</div></div>
+        </div>
+        <div class="tbl-wrap">
+          <table style="table-layout:fixed">
+            <thead><tr>
+              <th style="width:${items[0]?.instance_id?'22%':'28%'}">${items[0]?.instance_id?'ID / Nome':'Serviço'}</th>
+              ${items[0]?.instance_type ? '<th style="width:14%">Tipo</th>' : ''}
+              <th style="width:13%">Região</th>
+              <th style="width:11%">Custo</th>
+              ${hasCpu ? '<th style="width:14%">CPU %</th>' : ''}
+              ${hasMem ? '<th style="width:14%">Mem %</th>' : ''}
+              ${items[0]?.storage_gb ? '<th style="width:10%">Storage</th>' : ''}
+              <th style="width:14%">Status</th>
+            </tr></thead>
+            <tbody>${buildResourceRows(items, hasCpu, hasMem)}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('svc-list').innerHTML = html ||
+    '<div class="empty"><span class="empty-icon">📭</span>Sem dados de recursos para exibir.</div>';
+}
+
+function toggleDrill(id, chevId) {
+  const panel = document.getElementById(id);
+  const chev  = document.getElementById(chevId);
+  const isOpen = panel.classList.contains('open');
+  document.querySelectorAll('.drill-panel.open').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.chevron.open').forEach(c => c.classList.remove('open'));
+  if (!isOpen) { panel.classList.add('open'); if (chev) chev.classList.add('open'); }
+}
+
+// ─── Recommendations ──────────────────────────────────────────────────────────
+function renderRecommendations(data) {
+  const total  = data.reduce((s,r) => s+r.cost, 0);
+  const svcAgg = {};
+  data.forEach(r => {
+    if (!svcAgg[r.service]) svcAgg[r.service] = { cost:0, items:[], cloud:r.cloud };
+    svcAgg[r.service].cost += r.cost;
+    svcAgg[r.service].items.push(r);
+  });
+  const recs = [];
+
+  Object.entries(svcAgg).forEach(([svc, agg]) => {
+    const items   = agg.items;
+    const withCpu = items.filter(r => r.cpu != null);
+    const withMem = items.filter(r => r.mem != null);
+
+    if (withCpu.length > 0) {
+      const avgCpu = withCpu.reduce((s,r) => s+r.cpu,0) / withCpu.length;
+      const idle   = withCpu.filter(r => r.cpu < 10);
+      const under  = withCpu.filter(r => r.cpu >= 10 && r.cpu < 30);
+
+      if (idle.length > 0) {
+        const waste = idle.reduce((s,r) => s+r.cost, 0);
+        recs.push({ type:'critical', icon:'🗑️', title:`${idle.length} instância(s) ociosa(s) em ${svc}`,
+          desc:`CPU abaixo de 10% — candidatas a desligamento imediato. Revise se ainda são necessárias ou implemente auto-shutdown fora do horário comercial. IDs: ${idle.slice(0,3).map(r=>r.instance_id||'?').join(', ')}${idle.length>3?'...':''}`,
+          saving: waste * 0.9 });
+      }
+      if (under.length > 0) {
+        const waste = under.reduce((s,r) => s+r.cost, 0);
+        recs.push({ type:'warning', icon:'📉', title:`${under.length} instância(s) superdimensionada(s) em ${svc}`,
+          desc:`CPU entre 10-30% de utilização. Considere rightsizing para um tipo menor — geralmente economiza 30-50% do custo do recurso. Avalie ${under.slice(0,3).map(r=>r.instance_type||r.instance_id||'?').join(', ')}.`,
+          saving: waste * 0.35 });
+      }
+    }
+
+    if (withMem.length > 0) {
+      const highMem = withMem.filter(r => r.mem > 90);
+      if (highMem.length > 0) {
+        recs.push({ type:'warning', icon:'⚠️', title:`Memória crítica em ${highMem.length} instância(s) de ${svc}`,
+          desc:`Uso de memória acima de 90%. Risco de degradação de performance. Avalie upgrade do tipo da instância ou otimização da aplicação.`,
+          saving: 0 });
+      }
+    }
+
+    if (agg.cost > total * 0.15) {
+      recs.push({ type:'saving', icon:'🏷️', title:`Reserved Instances / Savings Plans para ${svc}`,
+        desc:`Este serviço representa ${((agg.cost/total)*100).toFixed(0)}% do custo total (${fmt(agg.cost)}). Converter para RI ou Savings Plans de 1 ano pode gerar economia de 30-40% sem mudança na arquitetura.`,
+        saving: agg.cost * 0.35 });
+    }
+
+    const storageOnly = items.every(r => r.cpu == null && r.storage_gb != null);
+    if (storageOnly && items.length > 0) {
+      recs.push({ type:'saving', icon:'📦', title:`Otimização de camada de armazenamento em ${svc}`,
+        desc:`Identifique dados raramente acessados e migre para camadas frias (S3 Glacier, Azure Archive, OCI Archive). Economia potencial de 60-80% para dados de acesso infrequente.`,
+        saving: agg.cost * 0.4 });
+    }
+  });
+
+  const clouds  = [...new Set(data.map(r => r.cloud))];
+  if (clouds.length > 1) {
+    recs.push({ type:'saving', icon:'🔄', title:'Consolidação multi-cloud',
+      desc:`Você opera em ${clouds.join(' + ')}. Analise workloads candidatos à consolidação e negocie contratos com o provedor dominante. Desconto por volume pode reduzir custos significativamente.`,
+      saving: total * 0.07 });
+  }
+
+  const regions = [...new Set(data.map(r => r.region))];
+  if (regions.length > 4) {
+    recs.push({ type:'warning', icon:'🗺️', title:`Alta dispersão: ${regions.length} regiões ativas`,
+      desc:`Muitas regiões ativas geram custos de transferência de dados (data egress). Considere consolidar workloads em menos regiões e usar CDN para servir usuários remotos.`,
+      saving: total * 0.04 });
+  }
+
+  // Sort by saving desc
+  recs.sort((a,b) => b.saving - a.saving);
+  const totalSaving = recs.reduce((s,r) => s+r.saving, 0);
+
+  let html = `
+    <div class="savings-banner">
+      <span class="savings-icon">💰</span>
+      <div class="savings-body">
+        <div class="savings-label">Economia potencial identificada</div>
+        <div class="savings-amount">${fmt(totalSaving)}</div>
+        <div class="savings-sub">${((totalSaving/total)*100).toFixed(0)}% do custo total · ${recs.length} recomendações</div>
+      </div>
+    </div>`;
+
+  recs.forEach(r => {
+    html += `
+    <div class="rec-item ${r.type}">
+      <div class="rec-header">
+        <span class="rec-icon">${r.icon}</span>
+        <div style="flex:1">
+          <div class="rec-title">${r.title}</div>
+          <div class="rec-desc">${r.desc}</div>
+          <div class="rec-footer">
+            ${r.saving > 0 ? `<span class="rec-saving-amt">📉 Economia est. ${fmt(r.saving)}/mês</span>` : ''}
+          </div>
+        </div>
+        <span class="badge ${r.type==='critical'?'badge-critical':r.type==='warning'?'badge-warning':'badge-ok'}" style="flex-shrink:0;margin-left:8px">
+          ${r.type==='critical'?'Urgente':r.type==='warning'?'Atenção':'Economia'}
+        </span>
+      </div>
+    </div>`;
+  });
+
+  if (!recs.length) html += '<div class="empty"><span class="empty-icon">✅</span>Nenhuma recomendação identificada com os dados atuais.</div>';
+  document.getElementById('rec-list').innerHTML = html;
+}
+
+// ─── Details table ────────────────────────────────────────────────────────────
+function renderDetails(data) {
+  document.getElementById('detailBody').innerHTML = data
+    .sort((a,b) => b.cost-a.cost).slice(0,100).map(r => {
+      const st = getStatus(r);
+      const cb = r.cloud==='aws'?'badge-aws':r.cloud==='azure'?'badge-azure':r.cloud==='oci'?'badge-oci':'badge-multi';
+      const cpuBar = r.cpu != null
+        ? `<div style="display:flex;align-items:center;gap:4px"><span class="score-bar"><span class="score-fill" style="width:${Math.min(100,r.cpu)}%;background:${r.cpu<10?'var(--danger)':r.cpu<30?'var(--warning)':'var(--success)'}"></span></span>${pct(r.cpu)}</div>`
+        : '—';
+      const memBar = r.mem != null
+        ? `<div style="display:flex;align-items:center;gap:4px"><span class="score-bar"><span class="score-fill" style="width:${Math.min(100,r.mem)}%;background:${r.mem>90?'var(--danger)':r.mem>70?'var(--warning)':'var(--success)'}"></span></span>${pct(r.mem)}</div>`
+        : '—';
+      return `<tr>
+        <td title="${r.instance_id||r.service}">${r.instance_id||r.service}</td>
+        <td><span class="badge ${cb}">${r.cloud.toUpperCase()}</span></td>
+        <td>${r.region}</td>
+        <td style="color:var(--text-muted)">${r.instance_type||'—'}</td>
+        <td style="font-weight:600">${fmt(r.cost)}</td>
+        <td>${cpuBar}</td>
+        <td>${memBar}</td>
+        <td><span class="badge ${st.cls}">${st.label}</span></td>
+      </tr>`;
+    }).join('');
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${name}"]`).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  const data = getFiltered();
+  if      (name === 'overview')         renderOverview(data);
+  else if (name === 'resources')        renderResources(data);
+  else if (name === 'recommendations')  renderRecommendations(data);
+  else if (name === 'details')          renderDetails(data);
+}
+
+// ─── File processing ──────────────────────────────────────────────────────────
+function processData(rows, headers, filename) {
+  rawData = parseData(rows, headers);
+  if (!rawData.length) { alert('Não foi possível identificar dados válidos. Verifique as colunas do arquivo.'); return; }
+  const periods = [...new Set(rawData.map(r => r.date.slice(0,7)).filter(Boolean))].sort();
+  const sel = document.getElementById('filterPeriod');
+  sel.innerHTML = '<option value="">Todo período</option>' + periods.map(p => `<option value="${p}">${p}</option>`).join('');
+  const clouds = [...new Set(rawData.map(r => r.cloud))];
+  const badge  = document.getElementById('cloud-badge');
+  if (clouds.length === 1) {
+    badge.textContent  = clouds[0].toUpperCase();
+    badge.className    = 'badge badge-' + (clouds[0]==='aws'?'aws':clouds[0]==='azure'?'azure':clouds[0]==='oci'?'oci':'multi');
+  } else {
+    badge.textContent = 'Multi-cloud'; badge.className = 'badge badge-multi';
+  }
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('dashboard').style.display      = 'block';
+  document.getElementById('header-controls').style.display = 'flex';
+  renderAll();
+}
+
+// File input
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  if (file.name.endsWith('.csv')) {
+    Papa.parse(file, { header:true, skipEmptyLines:true, complete: r => processData(r.data, r.meta.fields, file.name) });
+  } else {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const wb   = XLSX.read(ev.target.result, { type:'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval:'' });
+      processData(json, json.length ? Object.keys(json[0]) : [], file.name);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+});
+
+// Drag and drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) { document.getElementById('fileInput').files = e.dataTransfer.files; document.getElementById('fileInput').dispatchEvent(new Event('change')); }
+});
+
+function resetDashboard() {
+  rawData = [];
+  Object.values(charts).forEach(c => c && c.destroy()); charts = {};
+  document.getElementById('upload-section').style.display  = 'block';
+  document.getElementById('dashboard').style.display       = 'none';
+  document.getElementById('header-controls').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.querySelector('.tab[onclick*="overview"]').click();
+}
+
+// ─── Demo data ────────────────────────────────────────────────────────────────
+function loadDemo() {
+  const SVC_AWS  = [['EC2',true,true],['RDS',false,false],['S3',false,false],['Lambda',false,false],['EKS',true,true],['CloudFront',false,false],['Redshift',false,false]];
+  const SVC_AZ   = [['Virtual Machines',true,true],['SQL Database',false,false],['Blob Storage',false,false],['AKS',true,true],['CDN',false,false],['Functions',false,false]];
+  const SVC_OCI  = [['Compute',true,true],['Autonomous DB',false,false],['Object Storage',false,false],['Load Balancer',false,false]];
+  const TYPES    = { aws:['t3.medium','t3.large','m5.xlarge','m5.2xlarge','c5.xlarge','r5.large'], azure:['Standard_D2s_v3','Standard_D4s_v3','Standard_B2s','Standard_E4s_v3'], oci:['VM.Standard.E4.Flex','VM.Standard.E3.Flex'] };
+  const REGIONS  = { aws:['us-east-1','us-west-2','sa-east-1','eu-west-1'], azure:['eastus','brazilsouth','westeurope','westus2'], oci:['sa-saopaulo-1','us-ashburn-1','eu-frankfurt-1'] };
+  const rows = [];
+  ['2024-10','2024-11','2024-12','2025-01','2025-02','2025-03'].forEach(m => {
+    [[SVC_AWS,'aws'],[SVC_AZ,'azure'],[SVC_OCI,'oci']].forEach(([svcs,cloud]) => {
+      svcs.forEach(([svc,hasCpu,hasMem]) => {
+        const count = Math.floor(Math.random()*5)+2;
+        for (let i=0; i<count; i++) {
+          const isIdle  = Math.random() < 0.18;
+          const isUnder = Math.random() < 0.22;
+          const cpu  = hasCpu ? (isIdle ? Math.random()*8 : isUnder ? (10+Math.random()*20) : (30+Math.random()*60)) : null;
+          const mem  = hasMem ? (isIdle ? (5+Math.random()*15) : (20+Math.random()*65)) : null;
+          const type = hasCpu ? TYPES[cloud][Math.floor(Math.random()*TYPES[cloud].length)] : null;
+          rows.push({
+            service: svc, cost: (Math.random()*3000+200).toFixed(2), date: m+'-01', cloud,
+            region:  REGIONS[cloud][Math.floor(Math.random()*REGIONS[cloud].length)],
+            instance_id:   hasCpu ? `${cloud.toUpperCase()}-${svc.replace(/\s/g,'-').toLowerCase()}-${String(i+1).padStart(3,'0')}` : null,
+            instance_type: type,
+            cpu_avg:       cpu  ? cpu.toFixed(1)  : null,
+            mem_avg:       mem  ? mem.toFixed(1)  : null,
+            storage_gb:    !hasCpu ? (Math.floor(Math.random()*2000)+100) : null
+          });
+        }
+      });
+    });
+  });
+  processData(rows, ['service','cost','date','cloud','region','instance_id','instance_type','cpu_avg','mem_avg','storage_gb'], 'dados_demo.csv');
+}
+</script>
+</body>
+</html>
