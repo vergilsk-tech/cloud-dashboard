@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Cost & FinOps Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f5f5f4;--sur:#fff;--sur2:#fafaf9;--brd:rgba(0,0,0,.08);--brds:rgba(0,0,0,.15);--tx:#0b0b0b;--txs:#52514e;--txm:#898781;--acc:#2a78d6;--accb:#e6f1fb;--acct:#0c447c;--ok:#1baf7a;--okb:#e1f5ee;--okt:#085041;--wa:#eda100;--wab:#faeeda;--wat:#633806;--er:#e34948;--erb:#fcebeb;--ert:#791f1f;--r:8px}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a19;--sur:#242423;--sur2:#2c2c2a;--brd:rgba(255,255,255,.08);--brds:rgba(255,255,255,.15);--tx:#f0efec;--txs:#c3c2b7;--txm:#898781;--accb:#0c447c;--acct:#b5d4f4;--okb:#085041;--okt:#9fe1cb;--wab:#633806;--wat:#fac775;--erb:#791f1f;--ert:#f7c1c1}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
+.hdr{background:var(--sur);border-bottom:.5px solid var(--brds);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100}
+.hdr h1{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.logo{width:28px;height:28px;background:linear-gradient(135deg,#FF9900,#0078D4,#F80000);border-radius:6px;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:700}
+.wrap{max-width:1200px;margin:0 auto;padding:24px}
+/* Upload */
+.upwrap{max-width:700px;margin:40px auto}
+.dropz{border:1.5px dashed var(--brds);border-radius:16px;padding:36px 24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sur)}
+.dropz:hover,.dropz.over{border-color:var(--acc);background:var(--accb)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:var(--r);border:.5px solid var(--brds);background:var(--sur);color:var(--tx);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s}
+.btn:hover{background:var(--sur2)}.btnp{background:var(--acc);color:#fff;border-color:var(--acc)}.btnp:hover{background:#1a68c6}
+.btnsm{padding:5px 12px;font-size:12px}.btnlnk{background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;text-decoration:underline}
+.hints{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:16px;text-align:left}
+.hint{background:var(--sur2);border:.5px solid var(--brd);border-radius:8px;padding:10px;font-size:11px;color:var(--txs)}
+.hint b{display:block;color:var(--tx);font-size:11px;margin-bottom:3px}
+/* Tabs */
+.tabs{display:flex;border-bottom:.5px solid var(--brds);margin-bottom:16px;overflow-x:auto}
+.tab{padding:10px 16px;font-size:13px;font-weight:500;color:var(--txs);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--tx)}.tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+.tc{display:none}.tc.active{display:block}
+/* KPI */
+.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--sur2);border-radius:var(--r);padding:12px 14px}
+.kl{font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.kv{font-size:20px;font-weight:600}.ks{font-size:11px;color:var(--txm);margin-top:2px}
+/* Cards */
+.card{background:var(--sur);border:.5px solid var(--brd);border-radius:12px;padding:18px 20px;margin-bottom:12px}
+.ct{font-size:11px;font-weight:600;color:var(--txs);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:600px){.g2{grid-template-columns:1fr}.hints{grid-template-columns:1fr}}
+.leg{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--txs);margin-bottom:8px}
+.leg span{display:flex;align-items:center;gap:4px}
+.ldot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+/* Badges */
+.b{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap}
+.baws{background:#FF990022;color:#7a4700}.baz{background:#0078D422;color:#004a84}.boci{background:#F8000022;color:#8b0000}.bmu{background:var(--accb);color:var(--acct)}
+.bcr{background:var(--erb);color:var(--ert)}.bwa{background:var(--wab);color:var(--wat)}.bok{background:var(--okb);color:var(--okt)}.bin{background:var(--accb);color:var(--acct)}
+@media(prefers-color-scheme:dark){.baws{background:#FF990033;color:#fac775}.baz{background:#0078D433;color:#85b7eb}.boci{background:#F8000033;color:#f09595}}
+/* Resource bars */
+.rb{flex:1;height:5px;background:var(--sur2);border-radius:3px;overflow:hidden}
+.rbf{height:5px;border-radius:3px}
+.sb{width:52px;height:7px;background:var(--sur2);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle}
+.sbf{height:7px;border-radius:3px;display:block}
+/* Service drill */
+.scard{background:var(--sur);border:.5px solid var(--brd);border-radius:12px;padding:14px 18px;margin-bottom:8px}
+.shdr{display:flex;align-items:center;gap:10px;cursor:pointer}.shdr:hover{opacity:.85}
+.drill{display:none;margin-top:12px;padding-top:12px;border-top:.5px solid var(--brd)}
+.drill.open{display:block}
+.dkg{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin-bottom:12px}
+.ds{background:var(--sur2);border-radius:var(--r);padding:8px 10px;border:.5px solid var(--brd)}
+.dsl{font-size:10px;color:var(--txm);margin-bottom:2px}.dsv{font-size:15px;font-weight:600}
+.chev{font-size:16px;color:var(--txm);transition:transform .2s;flex-shrink:0}.chev.open{transform:rotate(180deg)}
+/* FinOps cards */
+.fo-sec{margin-bottom:20px}
+.fo-ttl{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.fc{background:var(--sur);border:.5px solid var(--brd);border-radius:10px;padding:14px 16px}
+.fc.cr{border-left:3px solid var(--er)}.fc.wa{border-left:3px solid var(--wa)}.fc.ok{border-left:3px solid var(--ok)}
+.fn{font-size:13px;font-weight:600;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm{font-size:11px;color:var(--txs);line-height:1.6}
+.fcost{font-size:13px;font-weight:600;color:var(--er);margin-top:6px}
+.fsav{font-size:11px;color:var(--ok);margin-top:2px}
+.fact{margin-top:8px;font-size:11px;color:var(--txs);border-top:.5px solid var(--brd);padding-top:6px}
+/* Recs */
+.sbn{background:var(--okb);border:.5px solid var(--ok);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ri{border-left:3px solid;padding:12px 16px;margin-bottom:8px;background:var(--sur);border-radius:0 8px 8px 0}
+.ri.critical{border-left-color:var(--er)}.ri.warning{border-left-color:var(--wa)}.ri.saving{border-left-color:var(--ok)}
+/* Tables */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th{text-align:left;font-weight:600;color:var(--txs);border-bottom:.5px solid var(--brds);padding:7px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+td{padding:7px 9px;border-bottom:.5px solid var(--brd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--sur2)}
+.empty{text-align:center;padding:32px;color:var(--txm);font-size:13px}
+.guide{background:var(--accb);border:.5px solid var(--acc);border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:12px;color:var(--acct);line-height:1.8}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <h1><div class="logo">☁</div> Cloud Cost &amp; FinOps Dashboard</h1>
+  <div id="hdrctrl" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+    <select id="fcl" onchange="renderAll()" style="padding:5px 8px;border-radius:var(--r);border:.5px solid var(--brds);background:var(--sur);color:var(--tx);font-size:12px">
+      <option value="">Todas as clouds</option>
+      <option value="aws">AWS</option><option value="azure">Azure</option><option value="oci">OCI</option>
+    </select>
+    <select id="fpe" onchange="renderAll()" style="padding:5px 8px;border-radius:var(--r);border:.5px solid var(--brds);background:var(--sur);color:var(--tx);font-size:12px">
+      <option value="">Todo período</option>
+    </select>
+    <span id="clbdg" class="b bmu">Multi-cloud</span>
+    <button class="btn btnsm" onclick="resetDash()">↩ Trocar arquivo</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- UPLOAD -->
+  <div id="upsec" class="upwrap">
+    <div class="dropz" id="dropz" onclick="document.getElementById('fi').click()">
+      <div style="font-size:40px;opacity:.35;margin-bottom:12px">☁</div>
+      <div style="font-size:17px;font-weight:600;margin-bottom:8px">Arraste seu arquivo aqui</div>
+      <div style="font-size:13px;color:var(--txs);margin-bottom:18px">CSV ou Excel de custos (AWS/Azure/OCI) ou relatórios FinOps dos seus scripts</div>
+      <button class="btn btnp" onclick="event.stopPropagation();document.getElementById('fi').click()">📂 Escolher arquivo</button>
+      <div class="hints">
+        <div class="hint"><b>AWS Cost Explorer</b>Service · Cost · Region · Start</div>
+        <div class="hint"><b>AWS CUR</b>lineItem/ProductCode · lineItem/UnblendedCost</div>
+        <div class="hint"><b>EC2 FinOps Script</b>instance_id · cpu_avg · mem_avg · recommendation</div>
+        <div class="hint"><b>EBS/AMI/EIP/Snap</b>volume_id / image_id / allocation_id / snapshot_id</div>
+        <div class="hint"><b>Azure Cost Mgmt</b>ServiceName · CostUSD · Date · ResourceLocation</div>
+        <div class="hint"><b>OCI Cost Report</b>product/service · cost/myCost · product/region</div>
+      </div>
+    </div>
+    <input type="file" id="fi" accept=".csv,.xlsx,.xls" style="display:none">
+    <div id="uperr" style="display:none"></div>
+    <div style="text-align:center;margin-top:10px">
+      <button class="btnlnk" onclick="loadDemo()">Carregar dados de demonstração →</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" style="display:none">
+    <div class="kg" id="kgrid"></div>
+    <div class="tabs">
+      <button class="tab active" onclick="sw('overview')">📊 Visão Geral</button>
+      <button class="tab" onclick="sw('resources')">🖥️ Recursos</button>
+      <button class="tab" onclick="sw('finops')">🔍 FinOps</button>
+      <button class="tab" onclick="sw('recommendations')">💡 Recomendações</button>
+      <button class="tab" onclick="sw('details')">📋 Detalhes</button>
+    </div>
+    <div id="tc-overview" class="tc active">
+      <div class="g2">
+        <div class="card" style="margin-bottom:0"><div class="ct">Top serviços por custo</div><div id="lg-svc" class="leg"></div><div style="position:relative;height:230px"><canvas id="cSvc"></canvas></div></div>
+        <div class="card" style="margin-bottom:0"><div class="ct">Distribuição por cloud</div><div id="lg-cld" class="leg"></div><div style="position:relative;height:230px"><canvas id="cCld"></canvas></div></div>
+      </div>
+      <div class="card"><div class="ct">Evolução de custo no tempo</div><div id="lg-tm" class="leg"></div><div style="position:relative;height:210px"><canvas id="cTm"></canvas></div></div>
+      <div class="card"><div class="ct">Custo por região</div><div id="lg-rg" class="leg"></div><div style="position:relative;height:190px"><canvas id="cRg"></canvas></div></div>
+    </div>
+    <div id="tc-resources" class="tc"><div id="svclist"></div></div>
+    <div id="tc-finops" class="tc"><div id="fo-guide" class="guide" style="display:none"></div><div id="fo-content"></div></div>
+    <div id="tc-recommendations" class="tc"><div id="reclist"></div></div>
+    <div id="tc-details" class="tc">
+      <div class="card"><div class="tbl"><table>
+        <thead><tr>
+          <th style="width:20%">ID / Nome</th><th style="width:9%">Cloud</th><th style="width:12%">Região</th>
+          <th style="width:10%">Tipo</th><th style="width:9%">Custo</th>
+          <th style="width:9%">CPU%</th><th style="width:9%">Mem%</th><th style="width:9%">Disco%</th>
+          <th style="width:13%">Recomendação</th>
+        </tr></thead>
+        <tbody id="detbody"></tbody>
+      </table></div></div>
+    </div>
+  </div>
+</div>
+<footer style="text-align:center;padding:24px;color:var(--txm);font-size:11px;border-top:.5px solid var(--brd);margin-top:24px">
+  Cloud Cost &amp; FinOps Dashboard · 100% client-side · Seus dados nunca saem do navegador
+</footer>
+
+<script>
+// ═══ STATE ══════════════════════════════════════════════════════
+let COST=[], FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[]}, charts={};
+const CLR={aws:'#FF9900',azure:'#0078D4',oci:'#F80000'};
+const SER=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+const fmtBRL=s=>{if(!s||s==='N/A')return null;const n=parseFloat(String(s).replace('R$','').trim().replace(/\./g,'').replace(',','.'));return isNaN(n)?null:n;};
+const pct=n=>(+n||0).toFixed(1)+'%';
+const numOrNull=v=>{const n=parseFloat(String(v||'').replace('%','').replace(',','.'));return isNaN(n)?null:n;};
+
+// ═══ FORMAT DETECTION ═══════════════════════════════════════════
+function detectFmt(headers){
+  const raw=headers.map(x=>String(x).trim());
+  const lo=raw.map(x=>x.toLowerCase().replace(/[^a-z0-9_/]/g,''));
+  // AWS CUR
+  if(raw.some(x=>/^lineItem\//i.test(x)||/^product\//i.test(x)))return'aws_cur';
+  // Scripts FinOps - EC2 (instance_id + recommendation + cpu_avg)
+  if(lo.includes('instance_id')&&lo.includes('recommendation')&&(lo.includes('cpu_avg')||lo.includes('cpuavg')))return'finops_ec2';
+  // Scripts FinOps - EBS (volume_id + size_gib)
+  if(lo.includes('volume_id')&&lo.includes('size_gib'))return'finops_ebs';
+  // Scripts FinOps - AMI (image_id + age_days)
+  if(lo.includes('image_id')&&lo.includes('age_days'))return'finops_ami';
+  // Scripts FinOps - EIP (allocation_id + public_ip)
+  if(lo.includes('allocation_id')&&lo.includes('public_ip'))return'finops_eip';
+  // Scripts FinOps - Snapshot (snapshot_id + volume_size_gib)
+  if(lo.includes('snapshot_id')&&lo.includes('volume_size_gib'))return'finops_snap';
+  // OCI Cost Analysis pivot format: first col is "Date (UTC)", last col is "Total"
+  // All other cols are "Category / Service (Unit)" = cost in USD
+  if((raw[0]==='Date (UTC)'||raw[0]==='Date'||raw[0].toLowerCase().includes('date'))&&
+     String(raw[raw.length-1]||'').trim().toLowerCase()==='total'&&
+     raw.some(h=>String(h).includes(' / '))){return'oci_pivot';}
+
+  // AWS Cost Explorer (Service + Cost/Unblended Cost + Region)
+  if(lo.includes('service')&&lo.some(x=>x==='cost'||x.includes('unblendedcost')||x.includes('amortizedcost')))return'aws_ce';
+  // Azure
+  if(lo.some(x=>['costinusd','costusd','costinbillingcurrency'].includes(x)))return'azure';
+  // OCI
+  if(raw.some(x=>/^cost\//i.test(x)||/^lineItem\/interval/i.test(x)))return'oci';
+  return'generic';
+}
+
+// ═══ COLUMN HELPERS ══════════════════════════════════════════════
+function colE(H,list){const h=H.map(x=>String(x).trim().toLowerCase());for(const c of list){const i=h.indexOf(c.toLowerCase());if(i>=0)return H[i];}return null;}
+function colF(H,list){const h=H.map(x=>String(x).toLowerCase().replace(/[^a-z0-9]/g,''));for(const c of list){const cl=c.toLowerCase().replace(/[^a-z0-9]/g,'');if(!cl)continue;const i=h.findIndex(x=>x===cl||x.includes(cl)||cl.includes(x));if(i>=0)return H[i];}return null;}
+function fc(H,list){return colE(H,list)||colF(H,list)||null;}
+function g(row,col){return col?String(row[col]??'').trim():'';}
+function gn(row,col){return numOrNull(g(row,col));}
+
+// ═══ FRIENDLY NAMES ══════════════════════════════════════════════
+const FNAME={'amazon elastic compute cloud':'EC2','amazonec2':'EC2','amazon ec2':'EC2','amazon simple storage service':'S3','amazons3':'S3','amazon relational database service':'RDS','amazon cloudfront':'CloudFront','aws lambda':'Lambda','amazon elastic kubernetes service':'EKS','amazon redshift':'Redshift','amazon dynamodb':'DynamoDB','aws fargate':'Fargate','amazon elasticache':'ElastiCache','amazon elastic load balancing':'ELB','elastic load balancing':'ELB','amazon route 53':'Route 53','aws data transfer':'Data Transfer','amazon virtual private cloud':'VPC','amazon elastic block store':'EBS','amazon cloudwatch':'CloudWatch','aws key management service':'KMS','amazon api gateway':'API Gateway','amazon elastic file system':'EFS','amazon sagemaker':'SageMaker','aws glue':'Glue','azure sql database':'SQL Database','azure blob storage':'Blob Storage','azure kubernetes service':'AKS','azure functions':'Functions'};
+function friendly(n){const lo=n.toLowerCase().replace(/\s+/g,' ').trim();return FNAME[lo]||FNAME[lo.replace(/\s/g,'')]||n;}
+function normCloud(v,fmt){if(!v)return fmt==='azure'?'azure':fmt==='oci'?'oci':'aws';const s=v.toLowerCase();if(s.includes('aws')||s.includes('amazon'))return'aws';if(s.includes('azure')||s.includes('microsoft'))return'azure';if(s.includes('oci')||s.includes('oracle'))return'oci';return s||'aws';}
+
+// ═══ DATE NORMALISE ═══════════════════════════════════════════════
+function normDate(v){
+  if(v==null||v==='')return'';
+  const s=String(v).trim();
+  if(/^\d{4,5}$/.test(s)){const d=new Date(Math.round((+s-25569)*86400*1000));return d.toISOString().slice(0,10);}
+  const iso=s.replace(/T.*$/,'').replace(/\s.*$/,'').replace(/\//g,'-');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso))return iso;
+  const dmy=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);if(dmy)return`${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  const mdy=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(mdy)return`${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+  const mon=s.match(/^([A-Za-z]+)\s+(\d{4})/);if(mon){const ms={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};const m=ms[mon[1].slice(0,3).toLowerCase()];if(m)return`${mon[2]}-${m}-01`;}
+  return iso||s;
+}
+
+// ═══ PARSE FINOPS EC2 (seus scripts: finops_ec2_single_account.py / aws_finops-ec2.py) ══
+function parseFinOpsEC2(rows,H){
+  // Both scripts export these exact fields (some differ slightly, covered via aliases)
+  const cId   =fc(H,['instance_id']);
+  const cName =fc(H,['name']);
+  const cState=fc(H,['state']);
+  const cType =fc(H,['instance_type']);
+  const cRegion=fc(H,['region']);
+  const cAcct =fc(H,['account_id']);
+  const cAlias=fc(H,['account_alias','account_name']);
+  const cVpc  =fc(H,['vpc_id']);
+  const cPlat =fc(H,['platform']);
+  const cLaunch=fc(H,['launch_time']);
+  const cVolumes=fc(H,['attached_volumes']);
+  const cEbsGb=fc(H,['total_ebs_gb']);
+  const cEbsTypes=fc(H,['ebs_volume_types']);
+  const cCpuMin=fc(H,['cpu_min']);
+  const cCpuAvg=fc(H,['cpu_avg']);
+  const cCpuMax=fc(H,['cpu_max']);
+  const cCpuP95=fc(H,['cpu_p95']);
+  const cMemMin=fc(H,['mem_min']);
+  const cMemAvg=fc(H,['mem_avg']);
+  const cMemMax=fc(H,['mem_max']);
+  const cMemP95=fc(H,['mem_p95']);
+  const cDskAvg=fc(H,['disk_avg']);
+  const cDskP95=fc(H,['disk_p95']);
+  const cCreditAvg=fc(H,['cpu_credit_avg']);
+  const cBurst=fc(H,['burstable']);
+  const cRec  =fc(H,['recommendation']);
+  const cSugg =fc(H,['suggested_type']);
+  const cSavBRL=fc(H,['estimated_savings_brl_month']);
+  const cPrio =fc(H,['priority']);
+  const cNotes=fc(H,['notes']);
+
+  return rows.filter(r=>r&&g(r,cId)).map(r=>{
+    const cpuAvg=numOrNull(g(r,cCpuAvg));
+    const memAvg=numOrNull(g(r,cMemAvg));
+    const dskAvg=numOrNull(g(r,cDskAvg));
+    const savBRL=fmtBRL(g(r,cSavBRL));
+    // Convert BRL savings to USD approx (÷5) for dashboard consistency
+    const savUSD=savBRL!=null?savBRL/5:null;
+    const rec=g(r,cRec)||'';
+    return{
+      id:g(r,cId),name:g(r,cName)||g(r,cId),state:g(r,cState).toLowerCase(),
+      itype:g(r,cType),region:g(r,cRegion)||'Global',cloud:'aws',
+      account:g(r,cAcct),alias:g(r,cAlias),vpc:g(r,cVpc),platform:g(r,cPlat),
+      launch:g(r,cLaunch),volumes:g(r,cVolumes),ebsGb:numOrNull(g(r,cEbsGb)),ebsTypes:g(r,cEbsTypes),
+      cpuMin:numOrNull(g(r,cCpuMin)),cpuAvg,cpuMax:numOrNull(g(r,cCpuMax)),cpuP95:numOrNull(g(r,cCpuP95)),
+      memMin:numOrNull(g(r,cMemMin)),memAvg,memMax:numOrNull(g(r,cMemMax)),memP95:numOrNull(g(r,cMemP95)),
+      dskAvg,dskP95:numOrNull(g(r,cDskP95)),
+      creditAvg:numOrNull(g(r,cCreditAvg)),burstable:g(r,cBurst),
+      rec,suggested:g(r,cSugg),savBRL,savUSD,priority:g(r,cPrio),notes:g(r,cNotes),
+      _type:'ec2'
+    };
+  });
+}
+
+// ═══ PARSE FINOPS EBS (ebs_ami_eip_snap scripts) ══════════════════
+function parseFinOpsEBS(rows,H){
+  return rows.filter(r=>r&&g(r,fc(H,['volume_id']))).map(r=>({
+    id:g(r,fc(H,['volume_id'])),name:g(r,fc(H,['name']))||g(r,fc(H,['volume_id'])),
+    state:g(r,fc(H,['state'])).toLowerCase(),
+    itype:g(r,fc(H,['volume_type'])),
+    gb:numOrNull(g(r,fc(H,['size_gib','size_gb']))),
+    iops:g(r,fc(H,['iops'])),throughput:g(r,fc(H,['throughput'])),
+    az:g(r,fc(H,['availability_zone'])),region:g(r,fc(H,['region']))||'Global',
+    cloud:'aws',account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),
+    createTime:g(r,fc(H,['create_time'])),ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,
+    snapId:g(r,fc(H,['snapshot_id'])),
+    costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month']))),
+    costBRL:g(r,fc(H,['estimated_cost_brl_month'])),
+    rec:g(r,fc(H,['recommendation'])),notes:g(r,fc(H,['notes'])),
+    encrypted:g(r,fc(H,['encrypted'])),
+    _type:'ebs'
+  }));
+}
+
+// ═══ PARSE FINOPS AMI ═════════════════════════════════════════════
+function parseFinOpsAMI(rows,H){
+  return rows.filter(r=>r&&g(r,fc(H,['image_id']))).map(r=>({
+    id:g(r,fc(H,['image_id'])),name:g(r,fc(H,['name']))||g(r,fc(H,['image_id'])),
+    state:g(r,fc(H,['state'])).toLowerCase(),
+    region:g(r,fc(H,['region']))||'Global',cloud:'aws',
+    account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),
+    creationDate:g(r,fc(H,['creation_date'])),ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,
+    arch:g(r,fc(H,['architecture'])),platform:g(r,fc(H,['platform_details'])),
+    snapCount:numOrNull(g(r,fc(H,['snapshot_count'])))||0,
+    totalSnapGb:numOrNull(g(r,fc(H,['total_snapshot_size_gib'])))||0,
+    description:g(r,fc(H,['description'])),
+    rec:g(r,fc(H,['recommendation'])),notes:g(r,fc(H,['notes'])),
+    _type:'ami'
+  }));
+}
+
+// ═══ PARSE FINOPS EIP ═════════════════════════════════════════════
+function parseFinOpsEIP(rows,H){
+  return rows.filter(r=>r&&g(r,fc(H,['allocation_id','public_ip']))).map(r=>({
+    id:g(r,fc(H,['allocation_id'])),name:g(r,fc(H,['public_ip'])),
+    ip:g(r,fc(H,['public_ip'])),
+    assocId:g(r,fc(H,['association_id'])),
+    netIntId:g(r,fc(H,['network_interface_id'])),
+    instanceId:g(r,fc(H,['instance_id'])),
+    region:g(r,fc(H,['region']))||'Global',cloud:'aws',
+    account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),
+    costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month'])))||3.6,
+    rec:g(r,fc(H,['recommendation'])),notes:g(r,fc(H,['notes'])),
+    _type:'eip'
+  }));
+}
+
+// ═══ PARSE FINOPS SNAPSHOT ════════════════════════════════════════
+function parseFinOpsSnap(rows,H){
+  return rows.filter(r=>r&&g(r,fc(H,['snapshot_id']))).map(r=>({
+    id:g(r,fc(H,['snapshot_id'])),name:g(r,fc(H,['snapshot_id'])),
+    state:g(r,fc(H,['state'])).toLowerCase(),
+    volId:g(r,fc(H,['volume_id'])),
+    gb:numOrNull(g(r,fc(H,['volume_size_gib','volume_size_gb'])))||0,
+    startTime:g(r,fc(H,['start_time'])),
+    ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,
+    encrypted:g(r,fc(H,['encrypted'])),
+    storageTier:g(r,fc(H,['storage_tier'])),
+    amiRelated:g(r,fc(H,['ami_related'])),
+    costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month']))),
+    region:g(r,fc(H,['region']))||'Global',cloud:'aws',
+    account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),
+    rec:g(r,fc(H,['recommendation'])),notes:g(r,fc(H,['notes'])),
+    _type:'snap'
+  }));
+}
+
+
+// ═══ PARSE OCI COST ANALYSIS PIVOT FORMAT ════════════════════════
+// Format: rows=days, cols=services, cells=USD cost, last col=Total
+// Column header format: "Category / Service Name (Unit)"
+// Date format: "Apr 30 2026"
+function parseOCIPivot(rows, H){
+  if(!rows.length)return[];
+  const dateCol=H[0];
+  const totalCol=H[H.length-1]; // "Total "
+  // Service columns = everything except first (date) and last (total)
+  const svcCols=H.slice(1,H.length-1);
+
+  const MONTHS={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+                jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+  function parseOCIDate(s){
+    if(!s)return'';
+    const m=String(s).trim().match(/^([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+    if(m)return`${m[3]}-${(MONTHS[m[1].toLowerCase().slice(0,3)]||'01')}-${m[2].padStart(2,'0')}`;
+    return String(s).trim();
+  }
+
+  function svcCategory(colName){
+    const parts=colName.split(' / ');
+    if(parts.length>=2){
+      // Clean up category name for grouping
+      const cat=parts[0].trim();
+      const CAT_MAP={
+        'Compute':'Compute','Block Storage':'Block Storage',
+        'Object Storage':'Object Storage','Database':'Database',
+        'Load Balancer':'Load Balancer','Networking':'Networking',
+        'Virtual Cloud Network':'Networking',
+        'File Storage':'File Storage','Streaming':'Streaming',
+        'Analytics':'Analytics','Identity and Access Management Service':'IAM',
+        'Oracle Web Application Firewall (WAF)':'WAF',
+        'OCI Database Service with PostgreSQL':'PostgreSQL DB',
+        'Telemetry':'Monitoring','Logging':'Logging',
+        'Notifications':'Notifications','Virtual Private Network':'VPN',
+      };
+      return CAT_MAP[cat]||cat;
+    }
+    return colName;
+  }
+
+  // Aggregate: one record per service per day
+  const out=[];
+  rows.forEach(row=>{
+    const date=parseOCIDate(g(row,dateCol));
+    svcCols.forEach(col=>{
+      const cost=parseFloat(String(row[col]||'0').replace(/[^0-9.-]/g,''))||0;
+      if(cost<=0)return;
+      out.push({
+        service:svcCategory(col),
+        fullService:col, // keep full name for tooltip
+        cost,date,
+        cloud:'oci',
+        region:'Global', // OCI Cost Analysis export doesn't split by region
+        iid:null,itype:null,cpuAvg:null,memAvg:null,dskAvg:null,
+        storage_gb:null,state:null,rec:null,
+      });
+    });
+  });
+  return out;
+}
+
+// ═══ PARSE COST DATA (AWS CE, CUR, Azure, OCI, generic) ══════════
+const CMAPS={
+  aws_cur:{service:['lineItem/ProductCode','product/ProductName'],cost:['lineItem/UnblendedCost','lineItem/BlendedCost','lineItem/NetUnblendedCost'],date:['lineItem/UsageStartDate','bill/BillingPeriodStartDate'],cloud:[],region:['product/region','product/location','lineItem/AvailabilityZone'],iid:['lineItem/ResourceId'],itype:['product/instanceType'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['product/volumeSize'],state:['state'],rec:['recommendation']},
+  aws_ce:{service:['Service','service'],cost:['Cost','Unblended Cost','Amortized Cost','Net Unblended Cost','cost'],date:['Start','End','Date','start','date','Period'],cloud:[],region:['Region','region'],iid:['Resource Id','ResourceId','resource_id'],itype:['Usage Type','usage_type'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  azure:{service:['ServiceName','Service Name','MeterCategory','Meter Category','ConsumedService'],cost:['CostUSD','Cost USD','CostInUSD','Cost in USD','CostInBillingCurrency','Cost','PreTaxCost','ExtendedCost'],date:['Date','UsageDateTime','BillingMonth','BillingPeriodStartDate'],cloud:['cloud'],region:['ResourceLocation','Resource Location','Location','Region'],iid:['ResourceId','Resource Id','ResourceName'],itype:['MeterSubCategory','SkuName','ServiceTier'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  oci:{service:['product/service','product/resourceType','service'],cost:['cost/myCost','cost/billedQuantity'],date:['lineItem/intervalUsageStart'],cloud:[],region:['product/region','lineItem/canonicalRegionName'],iid:['lineItem/resourceId'],itype:['product/shape','product/instanceType'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  generic:{service:['service','servico','serviço','produto','product','resource','ServiceName','MeterCategory'],cost:['cost','custo','valor','value','amount','total','price','preco','preço','spend','CostUSD','UnblendedCost','Cost'],date:['date','data','mes','mês','month','periodo','Date','Start'],cloud:['cloud','provider','provedor','Cloud'],region:['region','regiao','região','location','Region','ResourceLocation'],iid:['instance_id','instanceid','resource_id','ResourceId','ResourceName'],itype:['instance_type','instancetype','vm_size','sku','type','MeterSubCategory'],cpu:['cpu_avg','cpu','CPUUtilization'],mem:['mem_avg','memory','MemoryUtilization'],disk:['disk_avg','disk_used_percent'],storage_gb:['storage_gb','storage','disk_gb'],state:['state','status'],rec:['recommendation']}
+};
+
+function parseCost(rows,H){
+  if(!H||!H.length)return[];
+  const fmt=detectFmt(H);
+  const spec=CMAPS[fmt]||CMAPS.generic,gen=CMAPS.generic,cm={};
+  for(const k of Object.keys(gen)){cm[k]=fc(H,spec[k]||[])||fc(H,gen[k]||[]);}
+  console.log('[CloudDash] Cost format:',fmt,'\nmap:',cm);
+  return rows.filter(r=>r&&Object.values(r).some(v=>v!==''&&v!=null)).map(r=>{
+    const cost=parseFloat(String(r[cm.cost]??'0').replace(/[^0-9.-]/g,''))||0;
+    if(cost<=0)return null;
+    const cloud=normCloud(cm.cloud?r[cm.cloud]:null,fmt);
+    let service=cm.service?String(r[cm.service]||'').trim():'';
+    service=friendly(service||'Sem serviço');
+    const cpuAvg=gn(r,cm.cpu), memAvg=gn(r,cm.mem), dskAvg=gn(r,cm.disk);
+    return{
+      service,cost,date:normDate(cm.date?r[cm.date]:''),cloud,
+      region:cm.region?(String(r[cm.region]||'').trim()||'Global'):'Global',
+      iid:cm.iid?(String(r[cm.iid]||'').trim()||null):null,
+      itype:cm.itype?(String(r[cm.itype]||'').trim()||null):null,
+      cpuAvg,memAvg,dskAvg,
+      storage_gb:cm.storage_gb?numOrNull(g(r,cm.storage_gb)):null,
+      state:cm.state?(String(r[cm.state]||'').trim().toLowerCase()):null,
+      rec:cm.rec?(String(r[cm.rec]||'').trim()):null,
+    };
+  }).filter(Boolean);
+}
+
+// ═══ PROCESS FILE ════════════════════════════════════════════════
+function processData(mode,data,meta,filename){
+  $('uperr').style.display='none';
+
+  // Reset
+  COST=[]; FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[]};
+
+  if(mode==='multifinops'){
+    // data is already parsed FO object from parseMultiSheetFinOps
+    FO.ec2=data.ec2||[];FO.ebs=data.ebs||[];FO.ami=data.ami||[];
+    FO.eip=data.eip||[];FO.snap=data.snap||[];FO.s3=data.s3||[];
+    console.log('[CloudDash] Multi-sheet FinOps XLSX:',
+      'EC2:'+FO.ec2.length,'EBS:'+FO.ebs.length,'AMI:'+FO.ami.length,
+      'EIP:'+FO.eip.length,'Snap:'+FO.snap.length,'S3:'+FO.s3.length);
+  } else {
+    // Single sheet: data=rows, meta=H
+    const rows=data, H=meta;
+    const fmt=detectFmt(H);
+    console.log('[CloudDash] Single sheet format:',fmt,'Headers:',H.slice(0,10));
+    if(fmt==='finops_ec2'){FO.ec2=parseFinOpsEC2(rows,H);}
+    else if(fmt==='finops_ebs'){FO.ebs=parseFinOpsEBS(rows,H);}
+    else if(fmt==='finops_ami'){FO.ami=parseFinOpsAMI(rows,H);}
+    else if(fmt==='finops_eip'){FO.eip=parseFinOpsEIP(rows,H);}
+    else if(fmt==='finops_snap'){FO.snap=parseFinOpsSnap(rows,H);}
+    else if(fmt==='oci_pivot'){COST=parseOCIPivot(rows,H);}
+    else{COST=parseCost(rows,H);}
+  }
+
+  const totalFO=FO.ec2.length+FO.ebs.length+FO.ami.length+FO.eip.length+FO.snap.length+FO.s3.length;
+  if(!COST.length&&!totalFO){
+    const H=Array.isArray(meta)?meta:[];
+    const rows=Array.isArray(data)?data:[];
+    showErr(H,rows.length,H.length?detectFmt(H):'desconhecido');return;
+  }
+
+  if(COST.length){
+    const periods=[...new Set(COST.map(r=>r.date.slice(0,7)).filter(Boolean))].sort();
+    $('fpe').innerHTML='<option value="">Todo período</option>'+periods.map(p=>`<option value="${p}">${p}</option>`).join('');
+    const clouds=[...new Set(COST.map(r=>r.cloud))];
+    const bdg=$('clbdg');
+    if(clouds.length===1){bdg.textContent=clouds[0].toUpperCase();bdg.className='b b'+clouds[0];}
+    else{bdg.textContent='Multi-cloud';bdg.className='b bmu';}
+  }
+
+  $('upsec').style.display='none';
+  $('dash').style.display='block';
+  $('hdrctrl').style.display='flex';
+  renderAll();
+}
+
+function showErr(H,rowCount,fmt){
+  const prev=H.slice(0,8).join(', ');
+  const tips={
+    generic:`Formato genérico detectado. Precisa de coluna de <b>serviço</b> e <b>custo</b> numérico.<br><br>
+      <b>Para AWS Cost Explorer:</b> Billing → Cost Explorer → clique no gráfico de barras → botão <b>Download as CSV</b> no canto superior direito.<br>
+      Colunas geradas: <code>Service, Cost, Region, Start, Linked Account, Usage Type</code>`,
+    aws_ce:`AWS Cost Explorer detectado, mas sem linhas com custo > 0. Verifique se a coluna <b>Cost</b> tem valores numéricos.`,
+    aws_cur:`AWS CUR detectado. Verifique se <code>lineItem/UnblendedCost</code> tem valores numéricos.`,
+    azure:`Azure Cost Management detectado. Verifique se <code>CostUSD</code> ou <code>Cost</code> tem valores.`,
+    oci:`OCI detectado. Verifique se <code>cost/myCost</code> tem valores numéricos.`,
+    desconhecido:'Formato não reconhecido.',
+  };
+  $('uperr').innerHTML=`<div style="background:var(--erb);border:.5px solid var(--er);border-radius:12px;padding:14px 18px;margin-top:14px;text-align:left">
+    <div style="font-weight:600;color:var(--ert);margin-bottom:8px">⚠️ Não foi possível ler os dados</div>
+    <div style="font-size:12px;color:var(--ert);line-height:1.9">
+      <b>Formato detectado:</b> ${fmt||'desconhecido'} &nbsp;|&nbsp; <b>Linhas:</b> ${rowCount}<br>
+      <b>Colunas encontradas:</b> ${prev||'nenhuma'}<br><br>
+      ${tips[fmt]||tips.desconhecido}<br><br>
+      Abra <b>F12 → Console</b> para detalhes.
+    </div>
+  </div>`;
+  $('uperr').style.display='block';
+}
+
+// ═══ FILE READER ═════════════════════════════════════════════════
+// Helper: worksheet raw array -> {rows, H}
+function sheetToRows(raw){
+  if(!raw||raw.length<2)return{rows:[],H:[]};
+  let hi=0;
+  for(let i=0;i<Math.min(5,raw.length);i++){
+    if(raw[i].filter(c=>c!==''&&c!=null).length>raw[i].length*0.35){hi=i;break;}
+  }
+  const H=raw[hi].map(h=>String(h??'').trim()).filter(Boolean);
+  const rows=raw.slice(hi+1).filter(a=>a.some(c=>c!==''&&c!=null)).map(a=>{
+    const o={};H.forEach((h,i)=>{const v=a[i];o[h]=(v instanceof Date)?v.toISOString().slice(0,10):(v??'');});return o;
+  });
+  return{rows,H};
+}
+
+// Detect if workbook is a multi-sheet FinOps report (like aws_finops_report.xlsx)
+function isFinOpsWorkbook(sheetNames){
+  const lo=sheetNames.map(n=>n.toLowerCase().replace(/[^a-z0-9]/g,''));
+  return lo.some(n=>n.includes('ec2'))||lo.some(n=>n.includes('ebs'))||
+         lo.some(n=>n.includes('eip'))||lo.some(n=>n.includes('ami'))||
+         lo.some(n=>n.includes('snapshot'))||lo.some(n=>n.includes('s3tiering'))||
+         lo.some(n=>n.includes('summary')&&sheetNames.length>2);
+}
+
+// Parse a multi-sheet FinOps XLSX (aws_finops_report.xlsx format)
+function parseMultiSheetFinOps(wb){
+  const result={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[],summary:null};
+  wb.SheetNames.forEach(name=>{
+    const lo=name.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const raw=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+    const{rows,H}=sheetToRows(raw);
+    if(!rows.length)return;
+
+    // EC2_Low_CPU / EC2_Idle_Candidates / EC2_Low_Network
+    if(lo.includes('ec2')&&(lo.includes('cpu')||lo.includes('idle')||lo.includes('network'))){
+      // Columns: Region,InstanceId,Name,Type,State,ImageId,LaunchTime,AvgCPU%_30d,MaxCPU%_30d,Suggestion,Tags
+      rows.forEach(r=>{
+        const id=g(r,fc(H,['InstanceId','instanceid','instance_id']));
+        if(!id)return;
+        const cpuAvg=numOrNull(g(r,fc(H,['AvgCPU%_30d','AvgCPU_30d','avg_cpu','cpu_avg','AvgCPU%'])));
+        const cpuMax=numOrNull(g(r,fc(H,['MaxCPU%_30d','MaxCPU_30d','max_cpu','cpu_max','MaxCPU%'])));
+        result.ec2.push({
+          id,name:g(r,fc(H,['Name','name']))||id,
+          state:g(r,fc(H,['State','state'])).toLowerCase()||'running',
+          itype:g(r,fc(H,['Type','InstanceType','instance_type'])),
+          region:g(r,fc(H,['Region','region']))||'Global',
+          cloud:'aws',
+          cpuAvg,cpuMax,memAvg:null,memP95:null,cpuP95:null,
+          dskAvg:null,ebsGb:null,
+          netIn:numOrNull(g(r,fc(H,['Est_NetIn_bytes_per_day','netIn']))),
+          netOut:numOrNull(g(r,fc(H,['Est_NetOut_bytes_per_day','netOut']))),
+          tags:g(r,fc(H,['Tags','tags'])),
+          suggested:null,savUSD:null,savBRL:null,priority:null,
+          rec:cpuAvg!=null&&cpuAvg<10?'DOWNSIZE-STRONG':cpuAvg!=null&&cpuAvg<30?'DOWNSIZE':'REVIEW',
+          notes:g(r,fc(H,['Suggestion','suggestion','notes'])),
+          _type:'ec2'
+        });
+      });
+    }
+    // EBS_Unattached
+    else if(lo.includes('ebs')){
+      rows.forEach(r=>{
+        const id=g(r,fc(H,['VolumeId','volume_id','volumeid']));
+        if(!id)return;
+        result.ebs.push({
+          id,name:g(r,fc(H,['Name','name']))||id,
+          state:'available',
+          itype:g(r,fc(H,['Type','volume_type','VolumeType'])),
+          gb:numOrNull(g(r,fc(H,['SizeGiB','size_gib','SizeGB','size_gb']))),
+          iops:g(r,fc(H,['IOPS','iops'])),
+          az:g(r,fc(H,['AvailabilityZone','availability_zone','AZ'])),
+          region:g(r,fc(H,['Region','region']))||'Global',
+          cloud:'aws',
+          createTime:g(r,fc(H,['CreateTime','create_time'])),
+          ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,
+          snapId:g(r,fc(H,['SnapshotOrigin','snapshot_id','SnapshotId'])),
+          encrypted:g(r,fc(H,['Encrypted','encrypted'])),
+          costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month','EstCostUSD']))),
+          rec:g(r,fc(H,['Suggestion','suggestion','recommendation','notes'])),
+          notes:'',_type:'ebs'
+        });
+      });
+    }
+    // EIP_Unused
+    else if(lo.includes('eip')){
+      rows.forEach(r=>{
+        const id=g(r,fc(H,['AllocationId','allocation_id']));
+        const ip=g(r,fc(H,['PublicIp','public_ip']));
+        if(!id&&!ip)return;
+        result.eip.push({
+          id:id||ip,name:ip||id,ip,
+          assocId:g(r,fc(H,['AssociationId','association_id']))||'',
+          netIntId:g(r,fc(H,['NetworkInterfaceId','network_interface_id']))||'',
+          instanceId:g(r,fc(H,['InstanceId','instance_id']))||'',
+          region:g(r,fc(H,['Region','region']))||'Global',
+          cloud:'aws',
+          costUSD:3.65,
+          rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),
+          notes:'',_type:'eip'
+        });
+      });
+    }
+    // AMI_Inventory
+    else if(lo.includes('ami')){
+      rows.forEach(r=>{
+        const id=g(r,fc(H,['ImageId','image_id']));
+        if(!id)return;
+        result.ami.push({
+          id,name:g(r,fc(H,['Name','name']))||id,
+          state:g(r,fc(H,['State','state'])).toLowerCase(),
+          region:g(r,fc(H,['Region','region']))||'Global',
+          cloud:'aws',
+          creationDate:g(r,fc(H,['CreationDate','creation_date'])),
+          ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,
+          arch:g(r,fc(H,['Architecture','architecture'])),
+          platform:g(r,fc(H,['PlatformDetails','platform_details'])),
+          snapCount:numOrNull(g(r,fc(H,['SnapshotCount','snapshot_count'])))||0,
+          totalSnapGb:numOrNull(g(r,fc(H,['EstimatedSnapshotGiB','total_snapshot_size_gib'])))||0,
+          usedByEC2:numOrNull(g(r,fc(H,['UsedByEC2Count','used_by_ec2_count'])))||0,
+          candidateToReview:g(r,fc(H,['CandidateToReview','candidate_to_review'])),
+          rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),
+          notes:'',_type:'ami'
+        });
+      });
+    }
+    // Snapshot sheets
+    else if(lo.includes('snap')){
+      rows.forEach(r=>{
+        const id=g(r,fc(H,['SnapshotId','snapshot_id']));
+        if(!id)return;
+        result.snap.push({
+          id,name:id,
+          volId:g(r,fc(H,['VolumeId','volume_id'])),
+          gb:numOrNull(g(r,fc(H,['VolumeSizeGiB','volume_size_gib','SizeGiB'])))||0,
+          startTime:g(r,fc(H,['StartTime','start_time'])),
+          ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,
+          encrypted:g(r,fc(H,['Encrypted','encrypted'])),
+          storageTier:g(r,fc(H,['StorageTier','storage_tier'])),
+          amiRelated:g(r,fc(H,['AmiRelated','ami_related'])),
+          costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month','EstCostUSD']))),
+          region:g(r,fc(H,['Region','region']))||'Global',
+          cloud:'aws',
+          rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),
+          notes:'',_type:'snap'
+        });
+      });
+    }
+    // S3_Tiering
+    else if(lo.includes('s3')){
+      result.s3=rows.map(r=>({
+        bucket:g(r,fc(H,['Bucket','bucket'])),
+        region:g(r,fc(H,['Region','region']))||'Global',
+        sampledGiB:numOrNull(g(r,fc(H,['SampledGiB','sampled_gib']))),
+        old90pct:numOrNull(g(r,fc(H,['>=90d%','ge90pct','old_pct']))),
+        objects90d:numOrNull(g(r,fc(H,['>=90d','ge90d']))),
+        suggestion:g(r,fc(H,['Suggestion','suggestion'])),
+      })).filter(r=>r.bucket);
+    }
+    // Summary sheet — grab counts for KPIs
+    else if(lo.includes('summary')){
+      result.summary=rows;
+    }
+  });
+  return result;
+}
+
+function readFile(file,cb){
+  if(file.name.toLowerCase().endsWith('.csv')){
+    Papa.parse(file,{skipEmptyLines:true,delimiter:'',complete:r=>{
+      if(!r.data||r.data.length<2){cb('single',[],[]);return;}
+      let si=0;
+      if(String(r.data[0][0]||'').toLowerCase().startsWith('report')||String(r.data[0][0]||'').toLowerCase().startsWith('assembly'))si=1;
+      const H=r.data[si];
+      const rows=r.data.slice(si+1).map(arr=>{const o={};H.forEach((h,i)=>{o[h]=arr[i]??'';});return o;});
+      cb('single',rows,H);
+    }});
+  } else {
+    const rd=new FileReader();
+    rd.onload=ev=>{
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+        if(isFinOpsWorkbook(wb.SheetNames)){
+          cb('multifinops',parseMultiSheetFinOps(wb),wb.SheetNames);
+        } else {
+          const{rows,H}=sheetToRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}));
+          cb('single',rows,H);
+        }
+      }catch(e){console.error('[CloudDash] XLSX error:',e);cb('single',[],[]);}
+    };
+    rd.readAsArrayBuffer(file);
+  }
+}
+
+$('fi').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;$('uperr').style.display='none';readFile(f,(mode,data,meta)=>processData(mode,data,meta,f.name));});
+const dz=$('dropz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f){$('fi').files=e.dataTransfer.files;$('fi').dispatchEvent(new Event('change'));}});
+
+function resetDash(){
+  COST=[];FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[]};
+  Object.values(charts).forEach(c=>c&&c.destroy());charts={};
+  $('upsec').style.display='block';$('dash').style.display='none';$('hdrctrl').style.display='none';
+  $('fi').value='';document.querySelector('.tab[onclick*="overview"]').click();
+}
+
+// ═══ FILTERS ═════════════════════════════════════════════════════
+function getFilt(){
+  const fc=$('fcl').value,fp=$('fpe').value;
+  return COST.filter(r=>{if(fc&&r.cloud!==fc)return false;if(fp&&!r.date.includes(fp))return false;return true;});
+}
+
+function renderAll(){
+  const data=getFilt();
+  renderKPIs(data);
+  const at=document.querySelector('.tc.active').id.replace('tc-','');
+  if(at==='overview')renderOverview(data);
+  else if(at==='resources')renderResources(data);
+  else if(at==='finops')renderFinOps(data);
+  else if(at==='recommendations')renderRecs(data);
+  else if(at==='details')renderDetails(data);
+}
+
+function sw(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${name}"]`).classList.add('active');
+  $('tc-'+name).classList.add('active');
+  const data=getFilt();
+  if(name==='overview')renderOverview(data);
+  else if(name==='resources')renderResources(data);
+  else if(name==='finops')renderFinOps(data);
+  else if(name==='recommendations')renderRecs(data);
+  else if(name==='details')renderDetails(data);
+}
+
+// ═══ KPIs ════════════════════════════════════════════════════════
+function renderKPIs(data){
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const clouds=[...new Set(data.map(r=>r.cloud))];
+  const sa=data.reduce((a,r)=>{a[r.service]=(a[r.service]||0)+r.cost;return a},{});
+  const top=Object.entries(sa).sort((a,b)=>b[1]-a[1])[0];
+  const wc=data.filter(r=>r.cpuAvg!=null);
+  const avgCpu=wc.length?wc.reduce((s,r)=>s+r.cpuAvg,0)/wc.length:null;
+  const idle=wc.filter(r=>r.cpuAvg<10).length;
+  // FO counts
+  const foEC2=FO.ec2.length, foEBS=FO.ebs.length, foAMI=FO.ami.length, foEIP=FO.eip.length, foSnap=FO.snap.length;
+  const foTotal=foEC2+foEBS+foAMI+foEIP+foSnap;
+  const foWaste=FO.ec2.reduce((s,r)=>s+(r.savUSD||0),0)+FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0)+FO.eip.reduce((s,r)=>s+(r.costUSD||0),0);
+
+  let html=`
+    ${total>0?`<div class="kpi"><div class="kl">Custo total</div><div class="kv">${fmt(total)}</div><div class="ks">${data.length} registros</div></div>`:''}
+    ${top&&total>0?`<div class="kpi"><div class="kl">Maior serviço</div><div class="kv" style="font-size:14px;line-height:1.3">${top[0]}</div><div class="ks">${fmt(top[1])} · ${((top[1]/total)*100).toFixed(0)}%</div></div>`:''}
+    ${clouds.length?`<div class="kpi"><div class="kl">${clouds.length===1&&clouds[0]==='oci'?'Plataforma':'Clouds'}</div><div class="kv">${clouds.length===1&&clouds[0]==='oci'?'OCI':clouds.length}</div><div class="ks">${clouds.length===1?clouds[0]:clouds.join(', ')}</div></div>`:''}
+    ${avgCpu!=null?`<div class="kpi"><div class="kl">CPU médio</div><div class="kv" style="color:${avgCpu<20?'var(--er)':'var(--tx)'}">${pct(avgCpu)}</div><div class="ks">${idle} ociosa(s)</div></div>`:''}
+    ${foEC2>0?`<div class="kpi"><div class="kl">EC2 analisadas</div><div class="kv">${foEC2}</div><div class="ks">${FO.ec2.filter(r=>r.rec&&r.rec.includes('DOWN')).length} para rightsizing</div></div>`:''}
+    ${foEBS>0?`<div class="kpi"><div class="kl">EBS soltos</div><div class="kv" style="color:var(--wa)">${foEBS}</div><div class="ks">${fmt(FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0))}/mês</div></div>`:''}
+    ${foEIP>0?`<div class="kpi"><div class="kl">EIPs não assoc.</div><div class="kv" style="color:var(--er)">${foEIP}</div><div class="ks">${fmt(FO.eip.reduce((s,r)=>s+(r.costUSD||0),0))}/mês</div></div>`:''}
+    ${foAMI>0?`<div class="kpi"><div class="kl">AMIs órfãs</div><div class="kv" style="color:var(--wa)">${foAMI}</div><div class="ks">revisar</div></div>`:''}
+    ${foSnap>0?`<div class="kpi"><div class="kl">Snapshots</div><div class="kv">${foSnap}</div><div class="ks">${fmt(FO.snap.reduce((s,r)=>s+(r.costUSD||0),0))}/mês</div></div>`:''}
+    ${foWaste>0?`<div class="kpi"><div class="kl">Desperdício est.</div><div class="kv" style="color:var(--er)">${fmt(foWaste)}</div><div class="ks">eliminável/mês</div></div>`:''}
+  `;
+  $('kgrid').innerHTML=html;
+}
+
+// ═══ HELPERS ═════════════════════════════════════════════════════
+function leg(id,labels,colors){$(id).innerHTML=labels.slice(0,6).map((l,i)=>`<span><span class="ldot" style="background:${colors[i%colors.length]}"></span>${l}</span>`).join('');}
+function sbar(val,max,col){const w=Math.max(3,Math.min(100,(val/max)*100));return`<span class="sb"><span class="sbf" style="width:${w}%;background:${col}"></span></span>`;}
+function recBadge(rec){
+  if(!rec)return'<span class="b bin">—</span>';
+  const r=rec.toUpperCase();
+  if(r.includes('STRONG')||r.includes('STOPPED'))return`<span class="b bcr">${rec}</span>`;
+  if(r.includes('DOWN')||r.includes('UPSCALE')||r.includes('REVIEW'))return`<span class="b bwa">${rec}</span>`;
+  if(r.includes('KEEP'))return`<span class="b bok">${rec}</span>`;
+  return`<span class="b bin">${rec}</span>`;
+}
+function statBadge(r){
+  if(r.state&&(r.state.includes('stop')||r.state.includes('halt')))return{c:'bcr',l:'Parada'};
+  if(r.cpuAvg!=null&&r.cpuAvg<10)return{c:'bcr',l:'Ociosa'};
+  if(r.cpuAvg!=null&&r.cpuAvg<30)return{c:'bwa',l:'Sub-utilizada'};
+  if(r.memAvg!=null&&r.memAvg>85)return{c:'bwa',l:'Mem alta'};
+  if(r.cpuAvg!=null&&r.cpuAvg>85)return{c:'bwa',l:'CPU alta'};
+  if(r.cpuAvg!=null)return{c:'bok',l:'Saudável'};
+  return{c:'bin',l:'Sem métrica'};
+}
+
+// ═══ OVERVIEW ════════════════════════════════════════════════════
+function renderOverview(data){
+  if(!data.length){$('tc-overview').innerHTML='<div class="empty">Sem dados de custo. Carregue um arquivo de Cost Explorer, CUR, Azure ou OCI.</div>';return;}
+  $('tc-overview').innerHTML=`
+    <div class="g2">
+      <div class="card" style="margin-bottom:0"><div class="ct">Top serviços por custo</div><div id="lg-svc" class="leg"></div><div style="position:relative;height:230px"><canvas id="cSvc"></canvas></div></div>
+      <div class="card" style="margin-bottom:0"><div class="ct">Distribuição por cloud</div><div id="lg-cld" class="leg"></div><div style="position:relative;height:230px"><canvas id="cCld"></canvas></div></div>
+    </div>
+    <div class="card"><div class="ct">Evolução de custo no tempo</div><div id="lg-tm" class="leg"></div><div style="position:relative;height:210px"><canvas id="cTm"></canvas></div></div>
+    <div class="card"><div class="ct">Custo por região</div><div id="lg-rg" class="leg"></div><div style="position:relative;height:190px"><canvas id="cRg"></canvas></div></div>`;
+
+  const sa=data.reduce((a,r)=>{a[r.service]=(a[r.service]||0)+r.cost;return a},{});
+  const ts=Object.entries(sa).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  leg('lg-svc',ts.map(e=>e[0]),SER);
+  if(charts.svc)charts.svc.destroy();
+  charts.svc=new Chart($('cSvc'),{type:'bar',data:{labels:ts.map(e=>e[0]),datasets:[{data:ts.map(e=>Math.round(e[1])),backgroundColor:SER,borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}}},scales:{x:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.12)'}},y:{ticks:{color:'#898781',font:{size:11}},grid:{display:false}}}}});
+
+  const ca=data.reduce((a,r)=>{a[r.cloud]=(a[r.cloud]||0)+r.cost;return a},{});
+  const cl=Object.keys(ca),cv=cl.map(k=>Math.round(ca[k])),cc=cl.map(k=>CLR[k]||SER[4]);
+  leg('lg-cld',cl.map((l,i)=>`${l.toUpperCase()} ${fmt(cv[i])}`),cc);
+  if(charts.cld)charts.cld.destroy();
+  charts.cld=new Chart($('cCld'),{type:'doughnut',data:{labels:cl,datasets:[{data:cv,backgroundColor:cc,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)}`}}}}});
+
+  const ta={},cs=[...new Set(data.map(r=>r.cloud))];
+  data.forEach(r=>{const p=r.date.slice(0,7)||'s/d';if(!ta[p])ta[p]={};ta[p][r.cloud]=(ta[p][r.cloud]||0)+r.cost;});
+  const ps=Object.keys(ta).sort();
+  leg('lg-tm',cs,cs.map(c=>CLR[c]||SER[0]));
+  if(charts.tm)charts.tm.destroy();
+  charts.tm=new Chart($('cTm'),{type:'line',data:{labels:ps,datasets:cs.map((c,i)=>({label:c,data:ps.map(p=>Math.round(ta[p][c]||0)),borderColor:CLR[c]||SER[i],backgroundColor:(CLR[c]||SER[i])+'22',tension:.3,fill:false,pointRadius:4}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}},scales:{x:{ticks:{color:'#898781',font:{size:10},maxRotation:30},grid:{display:false}},y:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.12)'}}}}});
+
+  const ra=data.reduce((a,r)=>{a[r.region]=(a[r.region]||0)+r.cost;return a},{});
+  const tr=Object.entries(ra).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  leg('lg-rg',tr.map(e=>e[0]),SER);
+  if(charts.rg)charts.rg.destroy();
+  charts.rg=new Chart($('cRg'),{type:'bar',data:{labels:tr.map(e=>e[0]),datasets:[{data:tr.map(e=>Math.round(e[1])),backgroundColor:SER,borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}}},scales:{x:{ticks:{color:'#898781',font:{size:10},maxRotation:30},grid:{display:false}},y:{ticks:{callback:v=>fmt(v),color:'#898781',font:{size:10}},grid:{color:'rgba(128,128,128,.12)'}}}}});
+}
+
+// ═══ RESOURCES ═══════════════════════════════════════════════════
+function renderResources(data){
+  // If we have EC2 FinOps data, show it; otherwise show cost drill-down
+  if(FO.ec2.length){renderResourcesEC2();return;}
+  if(!data.length){$('svclist').innerHTML='<div class="empty">Sem dados. Carregue um arquivo de custos ou o CSV do script EC2 FinOps.</div>';return;}
+
+  const agg={};
+  data.forEach(r=>{if(!agg[r.service])agg[r.service]={cost:0,items:[],cloud:r.cloud};agg[r.service].cost+=r.cost;agg[r.service].items.push(r);if(r.cloud!==agg[r.service].cloud)agg[r.service].cloud='multi';});
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const sorted=Object.entries(agg).sort((a,b)=>b[1].cost-a[1].cost).slice(0,20);
+  let html='';
+  sorted.forEach(([svc,ag],idx)=>{
+    const share=total>0?((ag.cost/total)*100).toFixed(1):0;
+    const bw=Math.max(4,Math.min(100,(ag.cost/sorted[0][1].cost)*100));
+    const bc=SER[idx%SER.length];
+    const cb=ag.cloud==='aws'?'baws':ag.cloud==='azure'?'baz':ag.cloud==='oci'?'boci':'bmu';
+    const items=ag.items;
+    const hc=items.some(r=>r.cpuAvg!=null),hm=items.some(r=>r.memAvg!=null);
+    const ca=items.filter(r=>r.cpuAvg!=null),ma=items.filter(r=>r.memAvg!=null);
+    const ac=ca.length?(ca.reduce((s,r)=>s+r.cpuAvg,0)/ca.length).toFixed(1):null;
+    const am=ma.length?(ma.reduce((s,r)=>s+r.memAvg,0)/ma.length).toFixed(1):null;
+    const idle=ca.filter(r=>r.cpuAvg<10).length,under=ca.filter(r=>r.cpuAvg<30).length;
+    let sb='';
+    if(ac&&parseFloat(ac)<15)sb='<span class="b bcr">CPU crítico</span>';
+    else if(ac&&parseFloat(ac)<30)sb='<span class="b bwa">Subutilizado</span>';
+    else if(hc)sb='<span class="b bok">Saudável</span>';
+
+    const rows=items.sort((a,b)=>b.cost-a.cost).slice(0,25).map(r=>{
+      const st=statBadge(r);
+      const cpuB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:4px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span style="font-size:11px">${pct(r.cpuAvg)}</span></div>`:'—';
+      const memB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:4px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span style="font-size:11px">${pct(r.memAvg)}</span></div>`:'—';
+      return`<tr><td title="${r.iid||r.service}">${r.iid||r.service}</td>${r.itype?`<td>${r.itype}</td>`:''}<td>${r.region}</td><td style="font-weight:600">${fmt(r.cost)}</td>${hc?`<td>${cpuB}</td>`:''}${hm?`<td>${memB}</td>`:''}<td><span class="b ${st.c}">${st.l}</span></td></tr>`;
+    }).join('');
+
+    html+=`<div class="scard"><div class="shdr" onclick="togDrill('d${idx}','ch${idx}')">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:600">${svc}</span><span class="b ${cb}">${ag.cloud.toUpperCase()}</span>${sb}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="rb"><div class="rbf" style="width:${bw}%;background:${bc}"></div></div>
+          <span style="font-size:13px;font-weight:600;white-space:nowrap">${fmt(ag.cost)}</span>
+          <span style="font-size:11px;color:var(--txm)">${share}%</span>
+          ${ac?`<span style="font-size:11px;color:var(--txs)">CPU ${ac}%</span>`:''}
+          ${am?`<span style="font-size:11px;color:var(--txs)">Mem ${am}%</span>`:''}
+        </div>
+      </div><span class="chev" id="ch${idx}">⌄</span>
+    </div>
+    <div class="drill" id="d${idx}">
+      <div class="dkg">
+        <div class="ds"><div class="dsl">Instâncias</div><div class="dsv">${items.length}</div></div>
+        ${ac?`<div class="ds"><div class="dsl">CPU médio</div><div class="dsv" style="color:${parseFloat(ac)<20?'var(--er)':'var(--tx)'}">${ac}%</div></div>`:''}
+        ${am?`<div class="ds"><div class="dsl">Mem médio</div><div class="dsv">${am}%</div></div>`:''}
+        ${hc?`<div class="ds"><div class="dsl">Ociosas</div><div class="dsv" style="color:${idle>0?'var(--er)':'var(--tx)'}">${idle}</div></div>`:''}
+        ${hc?`<div class="ds"><div class="dsl">Sub. &lt;30%</div><div class="dsv" style="color:${under>0?'var(--wa)':'var(--tx)'}">${under}</div></div>`:''}
+        <div class="ds"><div class="dsl">% total</div><div class="dsv">${share}%</div></div>
+      </div>
+      <div class="tbl"><table style="table-layout:fixed"><thead><tr>
+        <th style="width:${items[0]?.iid?'22%':'28%'}">${items[0]?.iid?'ID':'Serviço'}</th>
+        ${items[0]?.itype?'<th style="width:13%">Tipo</th>':''}
+        <th style="width:12%">Região</th><th style="width:10%">Custo</th>
+        ${hc?'<th style="width:13%">CPU%</th>':''}${hm?'<th style="width:13%">Mem%</th>':''}
+        <th style="width:14%">Status</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+    </div></div>`;
+  });
+  $('svclist').innerHTML=html||'<div class="empty">Sem dados.</div>';
+}
+
+function renderResourcesEC2(){
+  const items=FO.ec2;
+  const total=items.reduce((s,r)=>s+(r.savUSD||0),0);
+  const byRec=items.reduce((a,r)=>{a[r.rec]=(a[r.rec]||0)+1;return a},{});
+
+  // Summary bar
+  let html=`<div class="sbn">
+    <span style="font-size:28px">🖥️</span>
+    <div style="flex:1">
+      <div style="font-size:12px;color:var(--okt);font-weight:600">${items.length} instâncias EC2 analisadas</div>
+      <div style="font-size:22px;font-weight:700;color:var(--okt)">${fmt(total)}/mês economia potencial</div>
+      <div style="font-size:11px;color:var(--okt);flex-wrap:wrap;display:flex;gap:8px;margin-top:4px">
+        ${Object.entries(byRec).map(([k,v])=>`<span>${recBadge(k)} × ${v}</span>`).join('')}
+      </div>
+    </div>
+  </div>`;
+
+  // Full table
+  html+=`<div class="card"><div class="ct">Instâncias EC2 — Detalhes e Rightsizing</div>
+  <div class="tbl"><table style="table-layout:fixed">
+    <thead><tr>
+      <th style="width:14%">ID</th><th style="width:10%">Nome</th><th style="width:8%">Estado</th>
+      <th style="width:9%">Tipo</th><th style="width:9%">Região</th>
+      <th style="width:7%">CPU avg</th><th style="width:7%">CPU p95</th>
+      <th style="width:7%">Mem avg</th><th style="width:7%">Mem p95</th>
+      <th style="width:7%">Disco avg</th><th style="width:8%">EBS GB</th>
+      <th style="width:7%">Sugerido</th><th style="width:10%">Recomendação</th>
+    </tr></thead><tbody>`;
+
+  items.sort((a,b)=>{
+    const order={'DOWNSIZE-STRONG':0,'REVIEW-STOPPED':1,'DOWNSIZE':2,'DOWNSIZE-MEM':3,'UPSCALE/INVESTIGATE':4,'NO-DATA':5,'KEEP':6};
+    return (order[a.rec]??7)-(order[b.rec]??7);
+  }).forEach(r=>{
+    const cpuB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const cpuP=r.cpuP95!=null?pct(r.cpuP95):'<span style="color:var(--txm)">N/A</span>';
+    const memB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const memP=r.memP95!=null?pct(r.memP95):'<span style="color:var(--txm)">N/A</span>';
+    const dskB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const statC=r.state==='running'?'bok':r.state.includes('stop')?'bcr':'bwa';
+    html+=`<tr>
+      <td title="${r.id}">${r.id}</td><td title="${r.name}">${r.name||'—'}</td>
+      <td><span class="b ${statC}">${r.state||'?'}</span></td>
+      <td>${r.itype||'—'}</td><td>${r.region}</td>
+      <td>${cpuB}</td><td style="font-size:11px">${cpuP}</td>
+      <td>${memB}</td><td style="font-size:11px">${memP}</td>
+      <td>${dskB}</td>
+      <td>${r.ebsGb!=null?r.ebsGb+' GB':'—'}</td>
+      <td style="font-size:11px;color:var(--ok)">${r.suggested||'—'}</td>
+      <td>${recBadge(r.rec)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  $('svclist').innerHTML=html;
+}
+
+function togDrill(id,ci){
+  const el=$(id),ch=$(ci);const op=el.classList.contains('open');
+  document.querySelectorAll('.drill.open').forEach(p=>p.classList.remove('open'));
+  document.querySelectorAll('.chev.open').forEach(c=>c.classList.remove('open'));
+  if(!op){el.classList.add('open');if(ch)ch.classList.add('open');}
+}
+
+// ═══ FINOPS TAB ══════════════════════════════════════════════════
+function renderFinOps(costData){
+  const guide=$('fo-guide'), content=$('fo-content');
+  const hasEC2=FO.ec2.length>0, hasEBS=FO.ebs.length>0, hasAMI=FO.ami.length>0;
+  const hasEIP=FO.eip.length>0, hasSnap=FO.snap.length>0;
+  const hasCostMetrics=costData.some(r=>r.cpuAvg!=null);
+
+  if(!hasEC2&&!hasEBS&&!hasAMI&&!hasEIP&&!hasSnap&&!hasCostMetrics){
+    guide.style.display='block';
+    guide.innerHTML=`<b>📋 Como carregar dados dos seus scripts:</b><br><br>
+      <b>EC2 (rightsizing + CPU/Mem):</b><br>
+      &nbsp;&nbsp;<code>python3 finops_ec2_single_account.py</code> → gera CSV com instance_id, cpu_avg, mem_avg, recommendation<br><br>
+      <b>EBS soltos, AMIs, EIPs, Snapshots:</b><br>
+      &nbsp;&nbsp;<code>python3 ebs_ami_eip_snap_todas_regioes.py</code> → gera 4 CSVs separados (ou abas do XLSX)<br><br>
+      <b>Carregue cada CSV separadamente</b> neste dashboard — ele detecta o tipo automaticamente e popula a aba correta.<br><br>
+      <b>Clouds Azure/OCI:</b> carregue o export de custos (Cost Management / OCI Cost Reports) + adicione colunas cpu_avg e mem_avg se disponíveis.`;
+    content.innerHTML='';
+    if(!hasCostMetrics)return;
+    guide.style.display='block';
+  } else {
+    guide.style.display='none';
+  }
+
+  let html='';
+  let totalWaste=0;
+
+  // ── EC2 Rightsizing (do script) ───────────────────────────────
+  if(hasEC2){
+    const strong=FO.ec2.filter(r=>r.rec==='DOWNSIZE-STRONG');
+    const down=FO.ec2.filter(r=>r.rec==='DOWNSIZE');
+    const downMem=FO.ec2.filter(r=>r.rec==='DOWNSIZE-MEM');
+    const stopped=FO.ec2.filter(r=>r.rec==='REVIEW-STOPPED');
+    const upscale=FO.ec2.filter(r=>r.rec==='UPSCALE/INVESTIGATE'||r.rec==='UPSCALE-OR-NON-BURSTABLE');
+    const nodata=FO.ec2.filter(r=>r.rec==='NO-DATA');
+    const wEC2=FO.ec2.reduce((s,r)=>s+(r.savUSD||0),0);
+    totalWaste+=wEC2;
+
+    if(stopped.length){
+      html+=foCards('⛔ EC2 paradas (REVIEW-STOPPED)',stopped.map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,
+        meta:`Estado: ${r.state} · EBS: ${r.ebsGb!=null?r.ebsGb+' GB':'?'} · CPU: N/A (parada)`,
+        cost:null,sav:r.savUSD,cls:'cr',
+        action:`Faça snapshot e encerre. Instâncias paradas ainda cobram EBS. Tipo atual: ${r.itype}. Notas: ${r.notes||'—'}`
+      })),'cr',stopped.reduce((s,r)=>s+(r.savUSD||0),0));
+    }
+    if(strong.length){
+      html+=foCards('🔴 Rightsizing forte — CPU < 10% (DOWNSIZE-STRONG)',strong.map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} → ${r.suggested||'?'} · ${r.region}`,
+        meta:`CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · CPU p95: ${r.cpuP95!=null?pct(r.cpuP95):'N/A'} · Mem avg: ${r.memAvg!=null?pct(r.memAvg):'N/A'}`,
+        cost:null,sav:r.savUSD,cls:'cr',
+        action:`Mudar para ${r.suggested||'tipo menor'}. ${r.notes||''}`
+      })),'cr',strong.reduce((s,r)=>s+(r.savUSD||0),0));
+    }
+    if(down.length){
+      html+=foCards('🟠 Rightsizing — CPU 10–30% (DOWNSIZE)',down.map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} → ${r.suggested||'?'} · ${r.region}`,
+        meta:`CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · CPU p95: ${r.cpuP95!=null?pct(r.cpuP95):'N/A'} · Mem avg: ${r.memAvg!=null?pct(r.memAvg):'N/A'}`,
+        cost:null,sav:r.savUSD,cls:'wa',
+        action:`Mudar para ${r.suggested||'tipo menor'}. ${r.notes||''}`
+      })),'wa',down.reduce((s,r)=>s+(r.savUSD||0),0));
+    }
+    if(downMem.length){
+      html+=foCards('🟡 Rightsizing por memória alta (DOWNSIZE-MEM)',downMem.map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,
+        meta:`Mem avg: ${r.memAvg!=null?pct(r.memAvg):'N/A'} · Mem p95: ${r.memP95!=null?pct(r.memP95):'N/A'} · CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'}`,
+        cost:null,sav:r.savUSD,cls:'wa',
+        action:`Avaliar upgrade de memória ou otimização da aplicação. ${r.notes||''}`
+      })),'wa',downMem.reduce((s,r)=>s+(r.savUSD||0),0));
+    }
+    if(upscale.length){
+      html+=foCards('🔺 CPU alta — avaliar upscale (UPSCALE)',upscale.map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,
+        meta:`CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · CPU p95: ${r.cpuP95!=null?pct(r.cpuP95):'N/A'} · Burstable: ${r.burstable}`,
+        cost:null,sav:null,cls:'wa',
+        action:`Avaliar upgrade ou migrar para família não-burstable. ${r.notes||''}`
+      })),'wa',0);
+    }
+    if(nodata.length){
+      html+=foCards(`ℹ️ Sem métricas CloudWatch (${nodata.length} instâncias)`,nodata.slice(0,6).map(r=>({
+        name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,
+        meta:`Estado: ${r.state}. CPU/Mem não disponíveis — instale o CloudWatch Agent.`,
+        cost:null,sav:null,cls:'ok',
+        action:'Instale o CloudWatch Agent para coletar CPU, memória e disco.'
+      })),'ok',0);
+    }
+  }
+
+  // ── EBS soltos ────────────────────────────────────────────────
+  if(hasEBS){
+    const w=FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;
+    html+=foCards('💾 Volumes EBS não anexados',FO.ebs.map(r=>({
+      name:r.id,sub:`${r.name||''} · ${r.itype||'gp2'} · ${r.gb||'?'} GiB · ${r.az||r.region}`,
+      meta:`Criado: ${r.createTime||'?'} · Idade: ${r.ageDays} dias · Snapshot: ${r.snapId||'nenhum'} · ${r.encrypted==='true'?'🔒 criptografado':'🔓 não criptografado'}`,
+      cost:r.costUSD,sav:r.costUSD,cls:'wa',
+      action:`${r.rec||'Fazer snapshot e deletar. EBS disponível cobra sem uso.'}${r.notes?' '+r.notes:''}`
+    })),'wa',w);
+  }
+
+  // ── AMIs órfãs ────────────────────────────────────────────────
+  if(hasAMI){
+    html+=foCards('🖼️ AMIs não utilizadas',FO.ami.map(r=>({
+      name:r.id,sub:`${r.name||''} · ${r.arch||'?'} · ${r.region}`,
+      meta:`Criado: ${r.creationDate||'?'} · Idade: ${r.ageDays} dias · Snapshots: ${r.snapCount} (${r.totalSnapGb} GiB) · ${r.platform||'?'}`,
+      cost:r.totalSnapGb*0.05,sav:r.totalSnapGb*0.05,cls:'wa',
+      action:`${r.rec||'Deregistrar e deletar snapshots associados se não houver mais uso.'}${r.notes?' '+r.notes:''}`
+    })),'wa',FO.ami.reduce((s,r)=>s+r.totalSnapGb*0.05,0));
+  }
+
+  // ── EIPs não associados ───────────────────────────────────────
+  if(hasEIP){
+    const w=FO.eip.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;
+    html+=foCards('🌐 IPs Elásticos não associados',FO.eip.map(r=>({
+      name:r.ip||r.id,sub:`Alloc: ${r.id} · ${r.region}`,
+      meta:`AssocId: ${r.assocId||'nenhum'} · Instance: ${r.instanceId||'nenhuma'} · NetInterface: ${r.netIntId||'nenhuma'}`,
+      cost:r.costUSD,sav:r.costUSD,cls:'cr',
+      action:`${r.rec||'Liberar imediatamente. AWS cobra $3.60+/mês por EIP não associado.'}${r.notes?' '+r.notes:''}`
+    })),'cr',w);
+  }
+
+  // ── Snapshots ─────────────────────────────────────────────────
+  if(hasSnap){
+    const orphans=FO.snap.filter(r=>r.amiRelated==='false'||r.amiRelated==='NO'||r.amiRelated===false);
+    const w=FO.snap.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;
+    html+=foCards(`📸 Snapshots (${orphans.length} possíveis órfãos)`,FO.snap.map(r=>({
+      name:r.id,sub:`Volume: ${r.volId||'?'} · ${r.gb} GiB · ${r.region}`,
+      meta:`Data: ${r.startTime||'?'} · Idade: ${r.ageDays} dias · AMI: ${r.amiRelated==='true'||r.amiRelated==='YES'?'✅ vinculado':'⚠️ possível órfão'} · Tier: ${r.storageTier||'standard'}`,
+      cost:r.costUSD,sav:orphans.includes(r)?r.costUSD:null,cls:orphans.includes(r)?'wa':'ok',
+      action:`${r.rec||'Revisar. Snapshots órfãos podem ser deletados com segurança.'}${r.notes?' '+r.notes:''}`
+    })),'wa',orphans.reduce((s,r)=>s+(r.costUSD||0),0));
+  }
+
+  // ── EC2 ociosas inferidas de dados de custo ───────────────────
+  if(!hasEC2&&hasCostMetrics){
+    const idle=costData.filter(r=>r.cpuAvg!=null&&r.cpuAvg<10);
+    const under=costData.filter(r=>r.cpuAvg!=null&&r.cpuAvg>=10&&r.cpuAvg<30);
+    const memHi=costData.filter(r=>r.memAvg!=null&&r.memAvg>85);
+    if(idle.length){html+=foCards('🔴 Instâncias ociosas (CPU < 10%) — inferidas',idle.map(r=>({name:r.iid||r.service,sub:`${r.itype||'?'} · ${r.region} · CPU: ${pct(r.cpuAvg)}`,meta:`Custo: ${fmt(r.cost)}/mês · Mem: ${r.memAvg!=null?pct(r.memAvg):'N/A'}`,cost:r.cost,sav:r.cost*0.85,cls:'cr',action:'Instale o script EC2 FinOps para análise mais detalhada com rightsizing preciso.'})),'cr',idle.reduce((s,r)=>s+r.cost*0.85,0));}
+    if(under.length){html+=foCards('🟠 Instâncias sub-utilizadas (CPU 10–30%) — inferidas',under.map(r=>({name:r.iid||r.service,sub:`${r.itype||'?'} · ${r.region} · CPU: ${pct(r.cpuAvg)}`,meta:`Custo: ${fmt(r.cost)}/mês`,cost:r.cost,sav:r.cost*0.35,cls:'wa',action:'Considere rightsizing. Use o script EC2 FinOps para sugestão de tipo.'})),'wa',under.reduce((s,r)=>s+r.cost*0.35,0));}
+    if(memHi.length){html+=foCards('🟠 Memória alta (Mem > 85%) — inferidas',memHi.map(r=>({name:r.iid||r.service,sub:`${r.itype||'?'} · ${r.region} · Mem: ${pct(r.memAvg)}`,meta:`CPU: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · Custo: ${fmt(r.cost)}/mês`,cost:r.cost,sav:null,cls:'wa',action:'Avaliar upgrade de instância ou otimização de aplicação.'})),'wa',0);}
+  }
+
+  // ── Total waste banner ────────────────────────────────────────
+  if(totalWaste>0){
+    html=`<div class="sbn"><span style="font-size:28px">💰</span><div style="flex:1"><div style="font-size:12px;color:var(--okt);font-weight:600">Desperdício total identificado</div><div style="font-size:26px;font-weight:700;color:var(--okt)">${fmt(totalWaste)}/mês</div></div></div>`+html;
+  }
+  // S3 Tiering suggestions
+  if(FO.s3&&FO.s3.length){
+    html+=foCards('🪣 S3 — objetos antigos sem política de ciclo de vida',FO.s3.map(r=>({
+      name:r.bucket,sub:`${r.region} · ${r.sampledGiB!=null?(r.sampledGiB.toFixed(2)+' GiB amostrados'):'?'}`,
+      meta:`Objetos ≥90 dias: ${r.objects90d||'?'} (${r.old90pct!=null?r.old90pct.toFixed(1)+'%':'?'} do total)`,
+      cost:null,sav:null,cls:'wa',
+      action:r.suggestion||'Configurar Lifecycle Policy: mover ≥90d para S3 Intelligent-Tiering ou Glacier. Economia pode chegar a 60-80% para dados de acesso infrequente.'
+    })),'wa',0);
+  }
+
+  if(!html)html='<div class="empty">✅ Nenhum recurso ocioso identificado com os dados atuais.</div>';
+  content.innerHTML=html;
+}
+
+function foCards(title,items,cls,waste){
+  if(!items.length)return'';
+  let html=`<div class="fo-sec"><div class="fo-ttl">${title}<span class="b ${cls==='cr'?'bcr':'bwa'}">${items.length}</span>${waste>0?`<span style="font-size:12px;color:var(--ok);font-weight:600">💰 ${fmt(waste)}/mês</span>`:''}</div><div class="fo-grid">`;
+  items.slice(0,12).forEach(it=>{
+    html+=`<div class="fc ${it.cls}">
+      <div class="fn" title="${it.name}">${it.name}</div>
+      <div class="fm">${it.sub}</div>
+      <div class="fm" style="margin-top:3px">${it.meta}</div>
+      ${it.cost!=null&&it.cost>0?`<div class="fcost">${fmt(it.cost)}/mês</div>`:''}
+      ${it.sav!=null&&it.sav>0?`<div class="fsav">💰 Economia est. ${fmt(it.sav)}/mês</div>`:''}
+      <div class="fact"><b>Ação:</b> ${it.action}</div>
+    </div>`;
+  });
+  if(items.length>12)html+=`<div class="fc" style="display:flex;align-items:center;justify-content:center;color:var(--txm);font-size:12px">+${items.length-12} mais</div>`;
+  html+='</div></div>';
+  return html;
+}
+
+// ═══ RECOMMENDATIONS ═════════════════════════════════════════════
+function renderRecs(data){
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const agg={};data.forEach(r=>{if(!agg[r.service])agg[r.service]={cost:0,items:[]};agg[r.service].cost+=r.cost;agg[r.service].items.push(r);});
+  const recs=[];
+
+  // From EC2 FinOps script
+  if(FO.ec2.length){
+    const strong=FO.ec2.filter(r=>r.rec==='DOWNSIZE-STRONG');
+    const down=FO.ec2.filter(r=>r.rec==='DOWNSIZE');
+    const stopped=FO.ec2.filter(r=>r.rec==='REVIEW-STOPPED');
+    if(stopped.length)recs.push({t:'critical',i:'⛔',title:`${stopped.length} EC2 parada(s) gerando custo`,desc:`Instâncias paradas ainda cobram EBS. Encerre e faça snapshot se necessário.`,sav:stopped.reduce((s,r)=>s+(r.savUSD||0),0)});
+    if(strong.length)recs.push({t:'critical',i:'🔴',title:`${strong.length} EC2 para DOWNSIZE-STRONG (CPU < 10%)`,desc:`CPU média abaixo de 10%. Tipos sugeridos: ${[...new Set(strong.map(r=>r.suggested).filter(Boolean))].join(', ')||'verificar script'}.`,sav:strong.reduce((s,r)=>s+(r.savUSD||0),0)});
+    if(down.length)recs.push({t:'warning',i:'📉',title:`${down.length} EC2 para DOWNSIZE (CPU 10–30%)`,desc:`CPU entre 10-30%. Tipos sugeridos: ${[...new Set(down.map(r=>r.suggested).filter(Boolean))].join(', ')||'verificar script'}.`,sav:down.reduce((s,r)=>s+(r.savUSD||0),0)});
+  }
+  // From EIP/EBS/Snap
+  if(FO.eip.length)recs.push({t:'critical',i:'🌐',title:`${FO.eip.length} IP(s) Elástico(s) não associado(s)`,desc:`Custo imediato eliminável: $3.60+/mês por IP. Libere agora no console EC2.`,sav:FO.eip.reduce((s,r)=>s+(r.costUSD||0),0)});
+  if(FO.ebs.length)recs.push({t:'warning',i:'💾',title:`${FO.ebs.length} volume(s) EBS não anexado(s)`,desc:`Volumes "available" cobram sem uso. Faça snapshot e delete.`,sav:FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0)});
+  if(FO.snap.length){const o=FO.snap.filter(r=>r.amiRelated==='false'||r.amiRelated==='NO');if(o.length)recs.push({t:'warning',i:'📸',title:`${o.length} snapshot(s) possivelmente órfão(s)`,desc:`Não vinculados a nenhuma AMI ativa. Revise e delete.`,sav:o.reduce((s,r)=>s+(r.costUSD||0),0)});}
+  if(FO.ami.length)recs.push({t:'warning',i:'🖼️',title:`${FO.ami.length} AMI(s) não utilizada(s)`,desc:`Deregistre e delete snapshots associados. Mantenha apenas últimas 2-3 versões por app.`,sav:FO.ami.reduce((s,r)=>s+r.totalSnapGb*0.05,0)});
+
+  // From cost data
+  Object.entries(agg).forEach(([svc,ag])=>{
+    if(ag.cost>total*0.12&&total>0)recs.push({t:'saving',i:'🏷️',title:`Reserved Instances / Savings Plans: ${svc}`,desc:`${((ag.cost/total)*100).toFixed(0)}% do custo total (${fmt(ag.cost)}). RI ou Savings Plans de 1 ano economiza 30–40%.`,sav:ag.cost*0.35});
+  });
+  const clouds=[...new Set(data.map(r=>r.cloud))];
+  if(clouds.length>1)recs.push({t:'saving',i:'🔄',title:'Consolidação multi-cloud',desc:`Operando em ${clouds.join(' + ')}. Analise workloads candidatos à consolidação.`,sav:total*0.07});
+
+  recs.sort((a,b)=>b.sav-a.sav);
+  const ts=recs.reduce((s,r)=>s+(r.sav||0),0);
+  let html=ts>0?`<div class="sbn"><span style="font-size:32px">💰</span><div style="flex:1"><div style="font-size:12px;color:var(--okt);font-weight:600">Economia potencial total</div><div style="font-size:26px;font-weight:700;color:var(--okt)">${fmt(ts)}/mês</div><div style="font-size:11px;color:var(--okt);opacity:.8">${recs.length} recomendações</div></div></div>`:'';
+  recs.forEach(r=>{html+=`<div class="ri ${r.t}"><div style="display:flex;align-items:flex-start;gap:10px"><span style="font-size:18px;flex-shrink:0">${r.i}</span><div style="flex:1"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${r.title}</div><div style="font-size:12px;color:var(--txs);line-height:1.6">${r.desc}</div>${r.sav>0?`<div style="font-size:12px;color:var(--ok);font-weight:600;margin-top:6px">📉 ${fmt(r.sav)}/mês</div>`:''}</div><span class="b ${r.t==='critical'?'bcr':r.t==='warning'?'bwa':'bok'}" style="flex-shrink:0;margin-left:8px">${r.t==='critical'?'Urgente':r.t==='warning'?'Atenção':'Economia'}</span></div></div>`;});
+  if(!recs.length)html='<div class="empty">✅ Nenhuma recomendação gerada com os dados atuais.</div>';
+  $('reclist').innerHTML=html;
+}
+
+// ═══ DETAILS ═════════════════════════════════════════════════════
+function renderDetails(data){
+  // Show EC2 FinOps data if available, otherwise cost data
+  if(FO.ec2.length){
+    $('detbody').innerHTML=FO.ec2.sort((a,b)=>{const o={'DOWNSIZE-STRONG':0,'REVIEW-STOPPED':1,'DOWNSIZE':2,'UPSCALE/INVESTIGATE':3,'NO-DATA':4,'KEEP':5};return(o[a.rec]??6)-(o[b.rec]??6);}).map(r=>{
+      const cB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'N/A';
+      const mB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'N/A';
+      const dB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'N/A';
+      const sc=r.state==='running'?'bok':r.state&&r.state.includes('stop')?'bcr':'bwa';
+      return`<tr><td title="${r.id}">${r.id}</td><td><span class="b baws">AWS</span></td><td>${r.region}</td><td>${r.itype||'—'}</td><td style="font-weight:600">${r.savUSD!=null?fmt(r.savUSD)+'/mês ec.':'—'}</td><td>${cB}</td><td>${mB}</td><td>${dB}</td><td>${recBadge(r.rec)}</td></tr>`;
+    }).join('');
+  } else {
+    $('detbody').innerHTML=data.sort((a,b)=>b.cost-a.cost).slice(0,100).map(r=>{
+      const st=statBadge(r);const cb=r.cloud==='aws'?'baws':r.cloud==='azure'?'baz':r.cloud==='oci'?'boci':'bmu';
+      const cB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'—';
+      const mB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'—';
+      const dB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'—';
+      return`<tr><td title="${r.iid||r.service}">${r.iid||r.service}</td><td><span class="b ${cb}">${r.cloud.toUpperCase()}</span></td><td>${r.region}</td><td style="color:var(--txm)">${r.itype||'—'}</td><td style="font-weight:600">${fmt(r.cost)}</td><td>${cB}</td><td>${mB}</td><td>${dB}</td><td><span class="b ${st.c}">${st.l}</span></td></tr>`;
+    }).join('');
+  }
+}
+
+// ═══ DEMO ════════════════════════════════════════════════════════
+function loadDemo(){
+  // Simulate AWS Cost Explorer CSV
+  const svcs=[['AmazonEC2','EC2'],['Amazon Relational Database Service','RDS'],['Amazon Simple Storage Service','S3'],['AWS Lambda','Lambda'],['Amazon Elastic Kubernetes Service','EKS'],['Amazon CloudFront','CloudFront'],['Amazon Redshift','Redshift']];
+  const rows=[];
+  ['2024-10','2024-11','2024-12','2025-01','2025-02','2025-03'].forEach(m=>{
+    svcs.forEach(([svc])=>{
+      rows.push({Service:svc,Cost:(Math.random()*2500+150).toFixed(2),Start:m+'-01',Region:['us-east-1','us-west-2','sa-east-1','eu-west-1'][Math.floor(Math.random()*4)],cloud:'aws','Usage Type':svc.includes('EC2')?['t3.medium','m5.xlarge','c5.xlarge'][Math.floor(Math.random()*3)]:null,cpu_avg:svc.includes('EC2')?(Math.random()<0.2?Math.random()*8:Math.random()<0.25?(10+Math.random()*20):(30+Math.random()*55)).toFixed(1):null,mem_avg:svc.includes('EC2')?(20+Math.random()*60).toFixed(1):null,disk_avg:svc.includes('EC2')?(10+Math.random()*70).toFixed(1):null,state:svc.includes('EC2')&&Math.random()<0.08?'stopped':'running'});
+    });
+  });
+  processData('single',rows,['Service','Cost','Start','Region','cloud','Usage Type','cpu_avg','mem_avg','disk_avg','state'],'demo_cost_explorer.csv');
+}
+</script>
+</body>
+</html>
