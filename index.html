@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Cost & FinOps Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f5;--sur:#fff;--sur2:#f8f9fb;--brd:rgba(0,0,0,.07);--brds:rgba(0,0,0,.13);
+  --tx:#0d0d0d;--txs:#4a4a52;--txm:#9a9a9a;
+  --acc:#4361ee;--accb:#eef1fd;--acct:#1a2fa0;
+  --ok:#10b981;--okb:#ecfdf5;--okt:#065f46;
+  --wa:#f59e0b;--wab:#fffbeb;--wat:#78350f;
+  --er:#ef4444;--erb:#fef2f2;--ert:#7f1d1d;
+  --r:10px;
+  /* chart palette – vibrant, distinct */
+  --c0:#4361ee;--c1:#f72585;--c2:#3a86ff;--c3:#fb5607;--c4:#8338ec;
+  --c5:#06d6a0;--c6:#ffbe0b;--c7:#ef233c;--c8:#118ab2;--c9:#073b4c;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0f1117;--sur:#1a1c23;--sur2:#22242d;--brd:rgba(255,255,255,.07);--brds:rgba(255,255,255,.14);
+  --tx:#f1f1f3;--txs:#b0b0b8;--txm:#666;
+  --accb:#1a2fa0;--acct:#aab8f5;
+  --okb:#065f46;--okt:#6ee7b7;--wab:#78350f;--wat:#fcd34d;--erb:#7f1d1d;--ert:#fca5a5;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ── Header ─────────────────────────────────────────────── */
+.hdr{background:var(--sur);border-bottom:.5px solid var(--brds);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:54px;position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.hdr h1{font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px;letter-spacing:-.2px}
+.logo{width:30px;height:30px;background:linear-gradient(135deg,#4361ee,#f72585);border-radius:8px;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:800}
+.hdr-right{display:flex;align-items:center;gap:8px}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.wrap{max-width:1280px;margin:0 auto;padding:28px 24px}
+.upwrap{max-width:720px;margin:48px auto}
+
+/* ── Upload ─────────────────────────────────────────────── */
+.dropz{border:2px dashed var(--brds);border-radius:20px;padding:44px 28px;text-align:center;cursor:pointer;transition:all .25s;background:var(--sur);box-shadow:0 2px 16px rgba(0,0,0,.04)}
+.dropz:hover,.dropz.over{border-color:var(--acc);background:var(--accb);transform:scale(1.005)}
+.hints{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px;margin-top:18px;text-align:left}
+.hint{background:var(--sur2);border:.5px solid var(--brd);border-radius:10px;padding:11px 13px;font-size:11px;color:var(--txs)}
+.hint b{display:block;color:var(--tx);font-size:11px;margin-bottom:3px;font-weight:600}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--r);border:.5px solid var(--brds);background:var(--sur);color:var(--tx);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn:hover{background:var(--sur2);border-color:var(--acc)}
+.btnp{background:var(--acc);color:#fff;border-color:var(--acc);box-shadow:0 2px 8px rgba(67,97,238,.25)}
+.btnp:hover{background:#3250d4;transform:translateY(-1px);box-shadow:0 4px 12px rgba(67,97,238,.3)}
+.btnsm{padding:5px 13px;font-size:12px}
+.btnlnk{background:none;border:none;color:var(--acc);font-size:12px;cursor:pointer;text-decoration:underline;opacity:.8}
+.btnlnk:hover{opacity:1}
+
+/* ── Period filter ──────────────────────────────────────── */
+.period-bar{display:flex;align-items:center;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.period-bar label{font-size:12px;color:var(--txm);font-weight:500}
+.period-bar select{font-size:12px;padding:6px 10px;border-radius:var(--r);border:.5px solid var(--brds);background:var(--sur);color:var(--tx);cursor:pointer}
+
+/* ── Tabs ─────────────────────────────────────────────── */
+.tabs{display:flex;border-bottom:.5px solid var(--brds);margin-bottom:20px;overflow-x:auto;gap:0}
+.tab{padding:11px 18px;font-size:13px;font-weight:500;color:var(--txs);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--tx)}.tab.active{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+.tc{display:none}.tc.active{display:block}
+
+/* ── KPI grid ─────────────────────────────────────────── */
+.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--sur);border-radius:14px;padding:16px 18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border:.5px solid var(--brd);transition:box-shadow .2s}
+.kpi:hover{box-shadow:0 4px 16px rgba(0,0,0,.09)}
+.kl{font-size:10px;color:var(--txm);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;font-weight:600}
+.kv{font-size:22px;font-weight:700;letter-spacing:-.5px}.ks{font-size:11px;color:var(--txm);margin-top:3px}
+.kpi-accent{border-top:3px solid var(--acc)}
+.kpi-ok{border-top:3px solid var(--ok)}
+.kpi-warn{border-top:3px solid var(--wa)}
+.kpi-er{border-top:3px solid var(--er)}
+
+/* ── Chart cards ─────────────────────────────────────── */
+.card{background:var(--sur);border:.5px solid var(--brd);border-radius:16px;padding:22px 24px;margin-bottom:14px;box-shadow:0 1px 8px rgba(0,0,0,.05)}
+.ct{font-size:11px;font-weight:700;color:var(--txm);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:640px){.g2{grid-template-columns:1fr}.hints{grid-template-columns:1fr}}
+.leg{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--txs);margin-bottom:10px}
+.leg span{display:flex;align-items:center;gap:5px;background:var(--sur2);padding:3px 8px;border-radius:20px;border:.5px solid var(--brd)}
+.ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ── Badges ──────────────────────────────────────────── */
+.b{display:inline-block;font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;white-space:nowrap;letter-spacing:.02em}
+.bcr{background:var(--erb);color:var(--ert)}.bwa{background:var(--wab);color:var(--wat)}.bok{background:var(--okb);color:var(--okt)}.bin{background:var(--accb);color:var(--acct)}
+
+/* ── Resource bars ────────────────────────────────────── */
+.rb{flex:1;height:6px;background:var(--sur2);border-radius:3px;overflow:hidden}
+.rbf{height:6px;border-radius:3px;transition:width .4s}
+.sb{width:56px;height:7px;background:var(--sur2);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle}
+.sbf{height:7px;border-radius:3px;display:block}
+
+/* ── Service drill ────────────────────────────────────── */
+.scard{background:var(--sur);border:.5px solid var(--brd);border-radius:14px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 6px rgba(0,0,0,.04);transition:box-shadow .2s}
+.scard:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.shdr{display:flex;align-items:center;gap:12px;cursor:pointer}
+.drill{display:none;margin-top:14px;padding-top:14px;border-top:.5px solid var(--brd)}
+.drill.open{display:block}
+.dkg{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:14px}
+.ds{background:var(--sur2);border-radius:10px;padding:10px 12px;border:.5px solid var(--brd)}
+.dsl{font-size:10px;color:var(--txm);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}.dsv{font-size:16px;font-weight:700}
+.chev{font-size:16px;color:var(--txm);transition:transform .2s;flex-shrink:0}.chev.open{transform:rotate(180deg)}
+
+/* ── FinOps ───────────────────────────────────────────── */
+.fo-sec{margin-bottom:22px}
+.fo-ttl{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.fc{background:var(--sur);border:.5px solid var(--brd);border-radius:12px;padding:16px 18px;transition:box-shadow .2s}
+.fc:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.fc.cr{border-left:4px solid var(--er)}.fc.wa{border-left:4px solid var(--wa)}.fc.ok{border-left:4px solid var(--ok)}
+.fn{font-size:13px;font-weight:600;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm{font-size:11px;color:var(--txs);line-height:1.7}
+.fcost{font-size:13px;font-weight:700;color:var(--er);margin-top:7px}
+.fsav{font-size:11px;color:var(--ok);margin-top:3px;font-weight:600}
+.fact{margin-top:10px;font-size:11px;color:var(--txs);border-top:.5px solid var(--brd);padding-top:8px}
+
+/* ── Recs ─────────────────────────────────────────────── */
+.sbn{background:linear-gradient(135deg,var(--okb),#d1fae5);border:.5px solid var(--ok);border-radius:14px;padding:18px 22px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(16,185,129,.1)}
+.ri{border-left:4px solid;padding:14px 18px;margin-bottom:10px;background:var(--sur);border-radius:0 12px 12px 0;box-shadow:0 1px 6px rgba(0,0,0,.04);transition:box-shadow .2s}
+.ri:hover{box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.ri.critical{border-left-color:var(--er)}.ri.warning{border-left-color:var(--wa)}.ri.saving{border-left-color:var(--ok)}
+
+/* ── Tables ───────────────────────────────────────────── */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th{text-align:left;font-weight:700;color:var(--txm);border-bottom:.5px solid var(--brds);padding:9px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+td{padding:9px 10px;border-bottom:.5px solid var(--brd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--sur2)}
+.empty{text-align:center;padding:40px;color:var(--txm);font-size:13px}
+.guide{background:var(--accb);border:.5px solid var(--acc);border-radius:12px;padding:16px 20px;margin-bottom:18px;font-size:12px;color:var(--acct);line-height:1.9}
+
+/* ── Error ────────────────────────────────────────────── */
+.errbox{background:var(--erb);border:.5px solid var(--er);border-radius:14px;padding:16px 20px;margin-top:16px;text-align:left}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <h1><div class="logo">☁</div>Cloud Cost &amp; FinOps</h1>
+  <div class="hdr-right" id="hdrctrl" style="display:none">
+    <button class="btn btnsm" onclick="resetDash()">↩ Trocar arquivo</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- UPLOAD -->
+  <div id="upsec" class="upwrap">
+    <div class="dropz" id="dropz" onclick="document.getElementById('fi').click()">
+      <div style="font-size:44px;opacity:.3;margin-bottom:14px">☁</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px">Arraste seu arquivo aqui</div>
+      <div style="font-size:13px;color:var(--txs);margin-bottom:20px">CSV ou Excel · AWS, Azure, OCI · Custos ou relatórios FinOps</div>
+      <button class="btn btnp" onclick="event.stopPropagation();document.getElementById('fi').click()">📂 Escolher arquivo</button>
+      <div class="hints">
+        <div class="hint"><b>AWS Cost Explorer</b>Service · Cost · Region · Start</div>
+        <div class="hint"><b>AWS CUR</b>lineItem/ProductCode · lineItem/UnblendedCost</div>
+        <div class="hint"><b>OCI Cost Analysis</b>Date (UTC) · Category/Service · Total</div>
+        <div class="hint"><b>Azure Cost Mgmt</b>ServiceName · CostUSD · Date</div>
+        <div class="hint"><b>EC2 FinOps Script</b>instance_id · cpu_avg · recommendation</div>
+        <div class="hint"><b>EBS/AMI/EIP/Snap</b>volume_id / image_id / allocation_id</div>
+      </div>
+    </div>
+    <input type="file" id="fi" accept=".csv,.xlsx,.xls" style="display:none">
+    <div id="uperr" style="display:none"></div>
+    <div style="text-align:center;margin-top:12px">
+      <button class="btnlnk" onclick="loadDemo()">Carregar dados de demonstração →</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" style="display:none">
+    <div class="kg" id="kgrid"></div>
+
+    <!-- Period filter only — no cloud filter -->
+    <div class="period-bar">
+      <label>Período:</label>
+      <select id="fpe" onchange="renderAll()">
+        <option value="">Todo o período</option>
+      </select>
+      <span id="fname" style="font-size:12px;color:var(--txm)"></span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="sw('overview')">📊 Visão Geral</button>
+      <button class="tab" onclick="sw('resources')">🖥️ Recursos</button>
+      <button class="tab" onclick="sw('finops')">🔍 FinOps</button>
+      <button class="tab" onclick="sw('recommendations')">💡 Recomendações</button>
+      <button class="tab" onclick="sw('details')">📋 Detalhes</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div id="tc-overview" class="tc active">
+      <div class="g2">
+        <div class="card" style="margin-bottom:0"><div class="ct">Top serviços por custo</div><div id="lg-svc" class="leg"></div><div style="position:relative;height:240px"><canvas id="cSvc"></canvas></div></div>
+        <div class="card" style="margin-bottom:0"><div class="ct">Distribuição por serviço</div><div id="lg-pie" class="leg"></div><div style="position:relative;height:240px"><canvas id="cPie"></canvas></div></div>
+      </div>
+      <div class="card"><div class="ct">Evolução diária/mensal de custo</div><div id="lg-tm" class="leg"></div><div style="position:relative;height:220px"><canvas id="cTm"></canvas></div></div>
+      <div class="card"><div class="ct">Custo por região</div><div id="lg-rg" class="leg"></div><div style="position:relative;height:200px"><canvas id="cRg"></canvas></div></div>
+    </div>
+
+    <!-- RESOURCES -->
+    <div id="tc-resources" class="tc"><div id="svclist"></div></div>
+
+    <!-- FINOPS -->
+    <div id="tc-finops" class="tc"><div id="fo-guide" class="guide" style="display:none"></div><div id="fo-content"></div></div>
+
+    <!-- RECOMMENDATIONS -->
+    <div id="tc-recommendations" class="tc"><div id="reclist"></div></div>
+
+    <!-- DETAILS -->
+    <div id="tc-details" class="tc">
+      <div class="card"><div class="tbl"><table>
+        <thead><tr>
+          <th style="width:22%">Serviço / Recurso</th>
+          <th style="width:14%">Região</th>
+          <th style="width:11%">Tipo</th>
+          <th style="width:10%">Custo</th>
+          <th style="width:9%">CPU%</th>
+          <th style="width:9%">Mem%</th>
+          <th style="width:9%">Disco%</th>
+          <th style="width:16%">Status</th>
+        </tr></thead>
+        <tbody id="detbody"></tbody>
+      </table></div></div>
+    </div>
+  </div>
+</div>
+
+<footer style="text-align:center;padding:28px;color:var(--txm);font-size:11px;border-top:.5px solid var(--brd);margin-top:32px">
+  Cloud Cost &amp; FinOps Dashboard · 100% client-side · Seus dados nunca saem do navegador
+</footer>
+
+<script>
+// ═══ STATE ══════════════════════════════════════════════════════
+let COST=[], FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[],rds:[],lambda:[],network:[],buckets:[],governance:[],other:[]}, charts={};
+
+// ═══ PALETTE — vibrant, presentation-quality ════════════════════
+const PAL=['#4361ee','#f72585','#3a86ff','#fb5607','#8338ec',
+           '#06d6a0','#ffbe0b','#ef233c','#118ab2','#2ec4b6',
+           '#e63946','#457b9d','#a8dadc','#f4a261','#e76f51'];
+const MONO_BLUE=['#1e3a8a','#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe'];
+
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'USD',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+const fmtK=n=>n>=1000000?`$${(n/1000000).toFixed(1)}M`:n>=1000?`$${(n/1000).toFixed(0)}K`:fmt(n);
+const fmtBRL=s=>{if(!s||s==='N/A')return null;const n=parseFloat(String(s).replace('R$','').trim().replace(/\./g,'').replace(',','.'));return isNaN(n)?null:n;};
+const pct=n=>(+n||0).toFixed(1)+'%';
+const numOrNull=v=>{const n=parseFloat(String(v||'').replace('%','').replace(',','.'));return isNaN(n)?null:n;};
+
+// Chart.js global defaults — clean, modern
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif";
+Chart.defaults.font.size=11;
+Chart.defaults.color='#9a9a9a';
+Chart.defaults.plugins.legend.display=false;
+Chart.defaults.plugins.tooltip.backgroundColor='rgba(13,13,13,.85)';
+Chart.defaults.plugins.tooltip.titleColor='#fff';
+Chart.defaults.plugins.tooltip.bodyColor='rgba(255,255,255,.8)';
+Chart.defaults.plugins.tooltip.padding=10;
+Chart.defaults.plugins.tooltip.cornerRadius=8;
+Chart.defaults.plugins.tooltip.displayColors=true;
+Chart.defaults.plugins.tooltip.boxWidth=10;
+Chart.defaults.plugins.tooltip.boxHeight=10;
+Chart.defaults.plugins.tooltip.boxPadding=4;
+
+// ═══ FORMAT DETECTION ═══════════════════════════════════════════
+function detectFmt(headers){
+  const raw=headers.map(x=>String(x).trim());
+  const lo=raw.map(x=>x.toLowerCase().replace(/[^a-z0-9_/]/g,''));
+  if(raw.some(x=>/^lineItem\//i.test(x)||/^product\//i.test(x)))return'aws_cur';
+  if(lo.includes('instance_id')&&lo.includes('recommendation')&&(lo.includes('cpu_avg')||lo.includes('cpuavg')))return'finops_ec2';
+  if(lo.includes('volume_id')&&lo.includes('size_gib'))return'finops_ebs';
+  if(lo.includes('image_id')&&lo.includes('age_days'))return'finops_ami';
+  if(lo.includes('allocation_id')&&lo.includes('public_ip'))return'finops_eip';
+  if(lo.includes('snapshot_id')&&lo.includes('volume_size_gib'))return'finops_snap';
+  // New resource types from finops_*_all.py scripts
+  if(lo.includes('resource_id')&&lo.includes('resource_type')&&lo.includes('recommendation')&&lo.some(x=>x==='cloud'))return'finops_multi';
+  if(lo.includes('dbinstanceidentifier')||lo.includes('connections_avg')||(lo.includes('resource_type')&&lo.includes('rds')))return'finops_rds';
+  if(lo.includes('invocations')||lo.includes('lambda_mem_mb')||lo.includes('lambda_duration_avg_ms'))return'finops_lambda';
+  if(lo.includes('active_targets')||(lo.includes('resource_type')&&lo.some(x=>x.includes('lb')||x.includes('nat')||x.includes('loadbalancer'))))return'finops_network';
+  if(lo.includes('bucket_name')||lo.includes('lifecycle_policy')||lo.includes('pct_ge_90d'))return'finops_buckets';
+  if(lo.includes('missing_tags')||(lo.includes('region_flag')&&lo.includes('present_tags')))return'finops_governance';
+  // OCI Cost Analysis pivot: Date(UTC) first col, Total last col, service cols contain " / "
+  if((raw[0]==='Date (UTC)'||raw[0].toLowerCase().includes('date'))&&
+     String(raw[raw.length-1]||'').trim().toLowerCase()==='total'&&
+     raw.some(h=>String(h).includes(' / ')))return'oci_pivot';
+  if(lo.includes('service')&&lo.some(x=>x==='cost'||x.includes('unblendedcost')||x.includes('amortizedcost')))return'aws_ce';
+  if(lo.some(x=>['costinusd','costusd','costinbillingcurrency'].includes(x)))return'azure';
+  if(raw.some(x=>/^cost\//i.test(x)||/^lineItem\/interval/i.test(x)))return'oci';
+  return'generic';
+}
+
+// ═══ COLUMN HELPERS ══════════════════════════════════════════════
+function colE(H,list){const h=H.map(x=>String(x).trim().toLowerCase());for(const c of list){const i=h.indexOf(c.toLowerCase());if(i>=0)return H[i];}return null;}
+function colF(H,list){const h=H.map(x=>String(x).toLowerCase().replace(/[^a-z0-9]/g,''));for(const c of list){const cl=c.toLowerCase().replace(/[^a-z0-9]/g,'');if(!cl)continue;const i=h.findIndex(x=>x===cl||x.includes(cl)||cl.includes(x));if(i>=0)return H[i];}return null;}
+function fc(H,list){return colE(H,list)||colF(H,list)||null;}
+function g(row,col){return col?String(row[col]??'').trim():'';}
+function gn(row,col){return numOrNull(g(row,col));}
+
+// ═══ FRIENDLY NAMES ══════════════════════════════════════════════
+const FNAME={'amazon elastic compute cloud':'EC2','amazonec2':'EC2','amazon ec2':'EC2','amazon simple storage service':'S3','amazons3':'S3','amazon relational database service':'RDS','amazon cloudfront':'CloudFront','aws lambda':'Lambda','amazon elastic kubernetes service':'EKS','amazon redshift':'Redshift','amazon dynamodb':'DynamoDB','aws fargate':'Fargate','amazon elasticache':'ElastiCache','amazon elastic load balancing':'ELB','elastic load balancing':'ELB','amazon route 53':'Route 53','aws data transfer':'Data Transfer','amazon virtual private cloud':'VPC','amazon elastic block store':'EBS','amazon cloudwatch':'CloudWatch','aws key management service':'KMS','amazon api gateway':'API Gateway','amazon elastic file system':'EFS','amazon sagemaker':'SageMaker','aws glue':'Glue','azure sql database':'SQL Database','azure blob storage':'Blob Storage','azure kubernetes service':'AKS','azure functions':'Functions'};
+function friendly(n){const lo=n.toLowerCase().replace(/\s+/g,' ').trim();return FNAME[lo]||FNAME[lo.replace(/\s/g,'')]||n;}
+
+// ═══ DATE NORMALISE ═══════════════════════════════════════════════
+function normDate(v){
+  if(v==null||v==='')return'';
+  const s=String(v).trim();
+  if(/^\d{4,5}$/.test(s)){const d=new Date(Math.round((+s-25569)*86400*1000));return d.toISOString().slice(0,10);}
+  const iso=s.replace(/T.*$/,'').replace(/\s.*$/,'').replace(/\//g,'-');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso))return iso;
+  const dmy=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);if(dmy)return`${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  const mdy=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(mdy)return`${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+  const mon=s.match(/^([A-Za-z]+)\s+(\d{4})/);
+  if(mon){const ms={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};const m=ms[mon[1].slice(0,3).toLowerCase()];if(m)return`${mon[2]}-${m}-01`;}
+  return iso||s;
+}
+
+// ═══ OCI PIVOT PARSER ════════════════════════════════════════════
+function parseOCIPivot(rows,H){
+  if(!rows.length)return[];
+  const dateCol=H[0];
+  const svcCols=H.slice(1,H.length-1);
+  const MONTHS={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  function parseOCIDate(s){
+    if(!s)return'';
+    const m=String(s).trim().match(/^([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+    if(m)return`${m[3]}-${(MONTHS[m[1].toLowerCase().slice(0,3)]||'01')}-${m[2].padStart(2,'0')}`;
+    return String(s).trim();
+  }
+  const CAT_MAP={'Compute':'Compute','Block Storage':'Block Storage','Object Storage':'Object Storage','Database':'Database','Load Balancer':'Load Balancer','Virtual Cloud Network':'Networking','File Storage':'File Storage','Streaming':'Streaming','Analytics':'Analytics','Identity and Access Management Service':'IAM','Oracle Web Application Firewall (WAF)':'WAF','OCI Database Service with PostgreSQL':'PostgreSQL DB','Telemetry':'Monitoring','Logging':'Logging','Notifications':'Notifications','Virtual Private Network':'VPN'};
+  function svcCat(colName){const parts=colName.split(' / ');if(parts.length>=2){const cat=parts[0].trim();return CAT_MAP[cat]||cat;}return colName;}
+  const out=[];
+  rows.forEach(row=>{
+    const date=parseOCIDate(g(row,dateCol));
+    svcCols.forEach(col=>{
+      const cost=parseFloat(String(row[col]||'0').replace(/[^0-9.-]/g,''))||0;
+      if(cost<=0)return;
+      out.push({service:svcCat(col),cost,date,cloud:'oci',region:'Global',iid:null,itype:null,cpuAvg:null,memAvg:null,dskAvg:null,storage_gb:null,state:null,rec:null});
+    });
+  });
+  return out;
+}
+
+// ═══ COST DATA PARSER ════════════════════════════════════════════
+const CMAPS={
+  aws_cur:{service:['lineItem/ProductCode','product/ProductName'],cost:['lineItem/UnblendedCost','lineItem/BlendedCost','lineItem/NetUnblendedCost'],date:['lineItem/UsageStartDate','bill/BillingPeriodStartDate'],region:['product/region','product/location','lineItem/AvailabilityZone'],iid:['lineItem/ResourceId'],itype:['product/instanceType'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['product/volumeSize'],state:['state'],rec:['recommendation']},
+  aws_ce:{service:['Service','service'],cost:['Cost','Unblended Cost','Amortized Cost','Net Unblended Cost','cost'],date:['Start','End','Date','start','date','Period'],region:['Region','region'],iid:['Resource Id','ResourceId','resource_id'],itype:['Usage Type','usage_type'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  azure:{service:['ServiceName','Service Name','MeterCategory','Meter Category','ConsumedService'],cost:['CostUSD','Cost USD','CostInUSD','Cost in USD','CostInBillingCurrency','Cost','PreTaxCost','ExtendedCost'],date:['Date','UsageDateTime','BillingMonth','BillingPeriodStartDate'],region:['ResourceLocation','Resource Location','Location','Region'],iid:['ResourceId','Resource Id','ResourceName'],itype:['MeterSubCategory','SkuName','ServiceTier'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  oci:{service:['product/service','product/resourceType','service'],cost:['cost/myCost','cost/billedQuantity'],date:['lineItem/intervalUsageStart'],region:['product/region','lineItem/canonicalRegionName'],iid:['lineItem/resourceId'],itype:['product/shape','product/instanceType'],cpu:['cpu_avg'],mem:['mem_avg'],disk:['disk_avg'],storage_gb:['storage_gb'],state:['state'],rec:['recommendation']},
+  generic:{service:['service','servico','serviço','produto','product','resource','ServiceName','MeterCategory'],cost:['cost','custo','valor','value','amount','total','price','preco','preço','spend','CostUSD','UnblendedCost','Cost'],date:['date','data','mes','mês','month','periodo','Date','Start'],region:['region','regiao','região','location','Region','ResourceLocation'],iid:['instance_id','instanceid','resource_id','ResourceId','ResourceName'],itype:['instance_type','instancetype','vm_size','sku','type','MeterSubCategory'],cpu:['cpu_avg','cpu','CPUUtilization'],mem:['mem_avg','memory','MemoryUtilization'],disk:['disk_avg','disk_used_percent'],storage_gb:['storage_gb','storage','disk_gb'],state:['state','status'],rec:['recommendation']}
+};
+
+function parseCost(rows,H){
+  if(!H||!H.length)return[];
+  const fmt=detectFmt(H);
+  const spec=CMAPS[fmt]||CMAPS.generic,gen=CMAPS.generic,cm={};
+  for(const k of Object.keys(gen)){cm[k]=fc(H,spec[k]||[])||fc(H,gen[k]||[]);}
+  console.log('[CloudDash] Format:',fmt,'map:',cm);
+  return rows.filter(r=>r&&Object.values(r).some(v=>v!==''&&v!=null)).map(r=>{
+    const cost=parseFloat(String(r[cm.cost]??'0').replace(/[^0-9.-]/g,''))||0;
+    if(cost<=0)return null;
+    // Detect platform from file format, not from a column that might have numeric values
+    const platform=fmt==='azure'?'azure':fmt==='oci'?'oci':(fmt==='aws_cur'||fmt==='aws_ce')?'aws':'other';
+    let service=cm.service?String(r[cm.service]||'').trim():'';
+    service=friendly(service||'Sem serviço');
+    return{service,cost,date:normDate(cm.date?r[cm.date]:''),cloud:platform,
+      region:cm.region?(String(r[cm.region]||'').trim()||'Global'):'Global',
+      iid:cm.iid?(String(r[cm.iid]||'').trim()||null):null,
+      itype:cm.itype?(String(r[cm.itype]||'').trim()||null):null,
+      cpuAvg:cm.cpu?numOrNull(g(r,cm.cpu)):null,
+      memAvg:cm.mem?numOrNull(g(r,cm.mem)):null,
+      dskAvg:cm.disk?numOrNull(g(r,cm.disk)):null,
+      storage_gb:cm.storage_gb?numOrNull(g(r,cm.storage_gb)):null,
+      state:cm.state?(String(r[cm.state]||'').trim().toLowerCase()):null,
+      rec:cm.rec?(String(r[cm.rec]||'').trim()):null,
+    };
+  }).filter(Boolean);
+}
+
+// ═══ FINOPS PARSERS (seus scripts) ═══════════════════════════════
+function parseFinOpsEC2(rows,H){
+  const cId=fc(H,['instance_id']),cName=fc(H,['name']),cState=fc(H,['state']),cType=fc(H,['instance_type']),cRegion=fc(H,['region']),cAcct=fc(H,['account_id']),cAlias=fc(H,['account_alias','account_name']),cVpc=fc(H,['vpc_id']),cPlat=fc(H,['platform']),cLaunch=fc(H,['launch_time']),cVolumes=fc(H,['attached_volumes']),cEbsGb=fc(H,['total_ebs_gb']),cEbsTypes=fc(H,['ebs_volume_types']),cCpuMin=fc(H,['cpu_min']),cCpuAvg=fc(H,['cpu_avg']),cCpuMax=fc(H,['cpu_max']),cCpuP95=fc(H,['cpu_p95']),cMemMin=fc(H,['mem_min']),cMemAvg=fc(H,['mem_avg']),cMemMax=fc(H,['mem_max']),cMemP95=fc(H,['mem_p95']),cDskAvg=fc(H,['disk_avg']),cDskP95=fc(H,['disk_p95']),cCreditAvg=fc(H,['cpu_credit_avg']),cBurst=fc(H,['burstable']),cRec=fc(H,['recommendation']),cSugg=fc(H,['suggested_type']),cSavBRL=fc(H,['estimated_savings_brl_month']),cPrio=fc(H,['priority']),cNotes=fc(H,['notes']);
+  return rows.filter(r=>r&&g(r,cId)).map(r=>{const savBRL=fmtBRL(g(r,cSavBRL));const savUSD=savBRL!=null?savBRL/5:null;const cpuAvg=numOrNull(g(r,cCpuAvg));const memAvg=numOrNull(g(r,cMemAvg));const dskAvg=numOrNull(g(r,cDskAvg));const rec=g(r,cRec)||'';return{id:g(r,cId),name:g(r,cName)||g(r,cId),state:g(r,cState).toLowerCase(),itype:g(r,cType),region:g(r,cRegion)||'Global',cloud:'aws',account:g(r,cAcct),alias:g(r,cAlias),vpc:g(r,cVpc),platform:g(r,cPlat),launch:g(r,cLaunch),volumes:g(r,cVolumes),ebsGb:numOrNull(g(r,cEbsGb)),ebsTypes:g(r,cEbsTypes),cpuMin:numOrNull(g(r,cCpuMin)),cpuAvg,cpuMax:numOrNull(g(r,cCpuMax)),cpuP95:numOrNull(g(r,cCpuP95)),memMin:numOrNull(g(r,cMemMin)),memAvg,memMax:numOrNull(g(r,cMemMax)),memP95:numOrNull(g(r,cMemP95)),dskAvg,dskP95:numOrNull(g(r,cDskP95)),creditAvg:numOrNull(g(r,cCreditAvg)),burstable:g(r,cBurst),rec,suggested:g(r,cSugg),savBRL,savUSD,priority:g(r,cPrio),notes:g(r,cNotes),_type:'ec2'};});
+}
+function parseFinOpsEBS(rows,H){return rows.filter(r=>r&&g(r,fc(H,['volume_id']))).map(r=>({id:g(r,fc(H,['volume_id'])),name:g(r,fc(H,['name']))||g(r,fc(H,['volume_id'])),state:g(r,fc(H,['state'])).toLowerCase(),itype:g(r,fc(H,['volume_type'])),gb:numOrNull(g(r,fc(H,['size_gib','size_gb']))),iops:g(r,fc(H,['iops'])),az:g(r,fc(H,['availability_zone'])),region:g(r,fc(H,['region']))||'Global',cloud:'aws',account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),createTime:g(r,fc(H,['create_time'])),ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,snapId:g(r,fc(H,['snapshot_id'])),costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month']))),rec:g(r,fc(H,['recommendation'])),notes:g(r,fc(H,['notes'])),encrypted:g(r,fc(H,['encrypted'])),_type:'ebs'}));}
+function parseFinOpsAMI(rows,H){return rows.filter(r=>r&&g(r,fc(H,['image_id']))).map(r=>({id:g(r,fc(H,['image_id'])),name:g(r,fc(H,['name']))||g(r,fc(H,['image_id'])),state:g(r,fc(H,['state'])).toLowerCase(),region:g(r,fc(H,['region']))||'Global',cloud:'aws',account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),creationDate:g(r,fc(H,['creation_date'])),ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,arch:g(r,fc(H,['architecture'])),platform:g(r,fc(H,['platform_details'])),snapCount:numOrNull(g(r,fc(H,['snapshot_count'])))||0,totalSnapGb:numOrNull(g(r,fc(H,['total_snapshot_size_gib'])))||0,usedByEC2:numOrNull(g(r,fc(H,['used_by_ec2_count'])))||0,rec:g(r,fc(H,['recommendation'])),notes:'',_type:'ami'}));}
+function parseFinOpsEIP(rows,H){return rows.filter(r=>r&&g(r,fc(H,['allocation_id','public_ip']))).map(r=>({id:g(r,fc(H,['allocation_id'])),name:g(r,fc(H,['public_ip'])),ip:g(r,fc(H,['public_ip'])),assocId:g(r,fc(H,['association_id']))||'',netIntId:g(r,fc(H,['network_interface_id']))||'',instanceId:g(r,fc(H,['instance_id']))||'',region:g(r,fc(H,['region']))||'Global',cloud:'aws',account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month'])))||3.6,rec:g(r,fc(H,['recommendation'])),notes:'',_type:'eip'}));}
+function parseFinOpsSnap(rows,H){return rows.filter(r=>r&&g(r,fc(H,['snapshot_id']))).map(r=>({id:g(r,fc(H,['snapshot_id'])),name:g(r,fc(H,['snapshot_id'])),state:g(r,fc(H,['state'])).toLowerCase(),volId:g(r,fc(H,['volume_id'])),gb:numOrNull(g(r,fc(H,['volume_size_gib','volume_size_gb'])))||0,startTime:g(r,fc(H,['start_time'])),ageDays:numOrNull(g(r,fc(H,['age_days'])))||0,encrypted:g(r,fc(H,['encrypted'])),storageTier:g(r,fc(H,['storage_tier'])),amiRelated:g(r,fc(H,['ami_related'])),costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month']))),region:g(r,fc(H,['region']))||'Global',cloud:'aws',account:g(r,fc(H,['account_id'])),alias:g(r,fc(H,['account_name'])),rec:g(r,fc(H,['recommendation'])),notes:'',_type:'snap'}));}
+// ── Generic multi-resource parser (finops_compute_all, finops_storage_all, finops_network_all)
+// These scripts output: cloud, resource_id, resource_name, resource_type, region,
+// recommendation, priority, est_cost_usd_month, est_savings_usd_month, notes, + type-specific cols
+function parseFinOpsGeneric(rows,H){
+  return rows.filter(r=>r&&(g(r,fc(H,['resource_id','resource_name','bucket_name','volume_id','image_id','allocation_id','snapshot_id','instance_id']))||g(r,fc(H,['resource_type'])))).map(r=>{
+    const rtype=(g(r,fc(H,['resource_type']))||'').toLowerCase();
+    const cloud=(g(r,fc(H,['cloud']))||'').toLowerCase()||'aws';
+    return{
+      id:         g(r,fc(H,['resource_id','volume_id','image_id','allocation_id','snapshot_id','instance_id','bucket_name']))||'?',
+      name:       g(r,fc(H,['resource_name','name','bucket_name']))||'?',
+      cloud,
+      region:     g(r,fc(H,['region']))||'Global',
+      rtype:      g(r,fc(H,['resource_type']))||'resource',
+      state:      g(r,fc(H,['state'])).toLowerCase()||'',
+      itype:      g(r,fc(H,['instance_type','volume_type','storage_class']))||'',
+      // Compute
+      cpuAvg:     numOrNull(g(r,fc(H,['cpu_avg']))),
+      cpuP95:     numOrNull(g(r,fc(H,['cpu_p95']))),
+      cpuMax:     numOrNull(g(r,fc(H,['cpu_max']))),
+      memAvg:     numOrNull(g(r,fc(H,['mem_avg']))),
+      memP95:     numOrNull(g(r,fc(H,['mem_p95']))),
+      dskAvg:     numOrNull(g(r,fc(H,['disk_avg']))),
+      suggested:  g(r,fc(H,['suggested_type']))||'',
+      savUSD:     numOrNull(g(r,fc(H,['est_savings_usd_month','est_savings_usd'])))||0,
+      costUSD:    numOrNull(g(r,fc(H,['est_cost_usd_month','est_cost_usd'])))||0,
+      // RDS
+      connectionsAvg: numOrNull(g(r,fc(H,['connections_avg']))),
+      platform:   g(r,fc(H,['platform']))||'',
+      // Lambda
+      invocations: numOrNull(g(r,fc(H,['invocations']))),
+      lambdaErrors: numOrNull(g(r,fc(H,['lambda_errors']))),
+      lambdaDurMs: numOrNull(g(r,fc(H,['lambda_duration_avg_ms']))),
+      lambdaMemMb: numOrNull(g(r,fc(H,['lambda_mem_mb']))),
+      // Storage
+      gb:          numOrNull(g(r,fc(H,['size_gib','size_gb','total_size_gb','sampled_gb'])))||0,
+      encrypted:   g(r,fc(H,['encrypted']))||'',
+      ageDays:     numOrNull(g(r,fc(H,['age_days'])))||0,
+      attachedTo:  g(r,fc(H,['attached_to','attached_to','association']))||'',
+      iopsUsed:    numOrNull(g(r,fc(H,['iops_used_avg']))),
+      iopsUtil:    numOrNull(g(r,fc(H,['iops_util_pct']))),
+      // Network
+      publicIp:    g(r,fc(H,['public_ip','public_ip']))||'',
+      association: g(r,fc(H,['association','active_targets']))||'',
+      trafficGb:   g(r,fc(H,['traffic_gb_month']))||'',
+      activeTargets: numOrNull(g(r,fc(H,['active_targets']))),
+      // Buckets
+      lifecyclePolicy: g(r,fc(H,['lifecycle_policy']))||'',
+      versioning:  g(r,fc(H,['versioning']))||'',
+      pctGe90d:    numOrNull(g(r,fc(H,['pct_ge_90d']))),
+      publicAccess: g(r,fc(H,['public_access']))||'',
+      totalObjects: numOrNull(g(r,fc(H,['total_objects']))),
+      totalSizeGb: numOrNull(g(r,fc(H,['total_size_gb','sampled_gb']))),
+      // Governance
+      missingTags: g(r,fc(H,['missing_tags']))||'',
+      regionFlag:  g(r,fc(H,['region_flag']))||'',
+      // Common
+      rec:         g(r,fc(H,['recommendation']))||'',
+      priority:    g(r,fc(H,['priority']))||'LOW',
+      missingTagsGov: g(r,fc(H,['missing_tags']))||'',
+      scheduleCandidate: g(r,fc(H,['schedule_candidate']))||'',
+      notes:       g(r,fc(H,['notes']))||'',
+      account:     g(r,fc(H,['account_id']))||'',
+      tags:        g(r,fc(H,['tags']))||'',
+      _rawType: rtype,
+    };
+  });
+}
+
+
+// ═══ MULTI-SHEET FINOPS XLSX ══════════════════════════════════════
+function sheetToRows(raw){
+  if(!raw||raw.length<2)return{rows:[],H:[]};
+  let hi=0;for(let i=0;i<Math.min(5,raw.length);i++){if(raw[i].filter(c=>c!==''&&c!=null).length>raw[i].length*0.35){hi=i;break;}}
+  const H=raw[hi].map(h=>String(h??'').trim()).filter(Boolean);
+  const rows=raw.slice(hi+1).filter(a=>a.some(c=>c!==''&&c!=null)).map(a=>{const o={};H.forEach((h,i)=>{const v=a[i];o[h]=(v instanceof Date)?v.toISOString().slice(0,10):(v??'');});return o;});
+  return{rows,H};
+}
+function isFinOpsWorkbook(names){const lo=names.map(n=>n.toLowerCase().replace(/[^a-z0-9]/g,''));return lo.some(n=>n.includes('ec2'))||lo.some(n=>n.includes('ebs'))||lo.some(n=>n.includes('eip'))||lo.some(n=>n.includes('ami'))||lo.some(n=>n.includes('snapshot'))||(lo.some(n=>n.includes('summary'))&&names.length>2);}
+function parseMultiSheetFinOps(wb){
+  const res={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[]};
+  wb.SheetNames.forEach(name=>{
+    const lo=name.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const raw=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+    const{rows,H}=sheetToRows(raw);if(!rows.length)return;
+    if(lo.includes('ec2')&&(lo.includes('cpu')||lo.includes('idle')||lo.includes('network'))){
+      rows.forEach(r=>{const id=g(r,fc(H,['InstanceId','instanceid','instance_id']));if(!id)return;const cpuAvg=numOrNull(g(r,fc(H,['AvgCPU%_30d','AvgCPU_30d','avg_cpu','cpu_avg','AvgCPU%'])));const cpuMax=numOrNull(g(r,fc(H,['MaxCPU%_30d','MaxCPU_30d','max_cpu','cpu_max','MaxCPU%'])));res.ec2.push({id,name:g(r,fc(H,['Name','name']))||id,state:g(r,fc(H,['State','state'])).toLowerCase()||'running',itype:g(r,fc(H,['Type','InstanceType','instance_type'])),region:g(r,fc(H,['Region','region']))||'Global',cloud:'aws',cpuAvg,cpuMax,memAvg:null,memP95:null,cpuP95:null,dskAvg:null,ebsGb:null,tags:g(r,fc(H,['Tags','tags'])),suggested:null,savUSD:null,savBRL:null,priority:null,rec:cpuAvg!=null&&cpuAvg<10?'DOWNSIZE-STRONG':cpuAvg!=null&&cpuAvg<30?'DOWNSIZE':'REVIEW',notes:g(r,fc(H,['Suggestion','suggestion','notes'])),_type:'ec2'});});
+    }else if(lo.includes('ebs')){rows.forEach(r=>{const id=g(r,fc(H,['VolumeId','volume_id','volumeid']));if(!id)return;res.ebs.push({id,name:g(r,fc(H,['Name','name']))||id,state:'available',itype:g(r,fc(H,['Type','volume_type','VolumeType'])),gb:numOrNull(g(r,fc(H,['SizeGiB','size_gib','SizeGB']))),iops:g(r,fc(H,['IOPS','iops'])),az:g(r,fc(H,['AvailabilityZone','availability_zone','AZ'])),region:g(r,fc(H,['Region','region']))||'Global',cloud:'aws',createTime:g(r,fc(H,['CreateTime','create_time'])),ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,snapId:g(r,fc(H,['SnapshotOrigin','snapshot_id'])),encrypted:g(r,fc(H,['Encrypted','encrypted'])),costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month','EstCostUSD']))),rec:g(r,fc(H,['Suggestion','suggestion','recommendation','notes'])),notes:'',_type:'ebs'});});
+    }else if(lo.includes('eip')){rows.forEach(r=>{const id=g(r,fc(H,['AllocationId','allocation_id']));const ip=g(r,fc(H,['PublicIp','public_ip']));if(!id&&!ip)return;res.eip.push({id:id||ip,name:ip||id,ip,assocId:g(r,fc(H,['AssociationId','association_id']))||'',netIntId:g(r,fc(H,['NetworkInterfaceId','network_interface_id']))||'',instanceId:g(r,fc(H,['InstanceId','instance_id']))||'',region:g(r,fc(H,['Region','region']))||'Global',cloud:'aws',costUSD:3.65,rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),notes:'',_type:'eip'});});
+    }else if(lo.includes('ami')){rows.forEach(r=>{const id=g(r,fc(H,['ImageId','image_id']));if(!id)return;res.ami.push({id,name:g(r,fc(H,['Name','name']))||id,state:g(r,fc(H,['State','state'])).toLowerCase(),region:g(r,fc(H,['Region','region']))||'Global',cloud:'aws',creationDate:g(r,fc(H,['CreationDate','creation_date'])),ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,arch:g(r,fc(H,['Architecture','architecture'])),platform:g(r,fc(H,['PlatformDetails','platform_details'])),snapCount:numOrNull(g(r,fc(H,['SnapshotCount','snapshot_count'])))||0,totalSnapGb:numOrNull(g(r,fc(H,['EstimatedSnapshotGiB','total_snapshot_size_gib'])))||0,usedByEC2:numOrNull(g(r,fc(H,['UsedByEC2Count','used_by_ec2_count'])))||0,candidateToReview:g(r,fc(H,['CandidateToReview','candidate_to_review'])),rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),notes:'',_type:'ami'});});
+    }else if(lo.includes('snap')){rows.forEach(r=>{const id=g(r,fc(H,['SnapshotId','snapshot_id']));if(!id)return;res.snap.push({id,name:id,volId:g(r,fc(H,['VolumeId','volume_id'])),gb:numOrNull(g(r,fc(H,['VolumeSizeGiB','volume_size_gib'])))||0,startTime:g(r,fc(H,['StartTime','start_time'])),ageDays:numOrNull(g(r,fc(H,['AgeDays','age_days'])))||0,encrypted:g(r,fc(H,['Encrypted','encrypted'])),storageTier:g(r,fc(H,['StorageTier','storage_tier'])),amiRelated:g(r,fc(H,['AmiRelated','ami_related'])),costUSD:numOrNull(g(r,fc(H,['estimated_cost_usd_month','EstCostUSD']))),region:g(r,fc(H,['Region','region']))||'Global',cloud:'aws',rec:g(r,fc(H,['Suggestion','suggestion','recommendation'])),notes:'',_type:'snap'});});
+    }else if(lo.includes('s3')){res.s3=rows.map(r=>({bucket:g(r,fc(H,['Bucket','bucket'])),region:g(r,fc(H,['Region','region']))||'Global',sampledGiB:numOrNull(g(r,fc(H,['SampledGiB','sampled_gib']))),old90pct:numOrNull(g(r,fc(H,['>=90d%','ge90pct','old_pct']))),objects90d:numOrNull(g(r,fc(H,['>=90d','ge90d']))),suggestion:g(r,fc(H,['Suggestion','suggestion']))})).filter(r=>r.bucket);}
+  });
+  return res;
+}
+
+// ═══ FILE READER ═════════════════════════════════════════════════
+function sheetToRowsRaw(raw){
+  if(!raw||raw.length<2)return{rows:[],H:[]};
+  let hi=0;for(let i=0;i<Math.min(5,raw.length);i++){if(raw[i].filter(c=>c!==''&&c!=null).length>raw[i].length*0.35){hi=i;break;}}
+  const H=raw[hi].map(h=>String(h??'').trim());
+  const rows=raw.slice(hi+1).filter(a=>a.some(c=>c!==''&&c!=null)).map(a=>{const o={};H.forEach((h,i)=>{const v=a[i];o[h]=(v instanceof Date)?v.toISOString().slice(0,10):(v??'');});return o;});
+  return{rows,H};
+}
+function readFile(file,cb){
+  if(file.name.toLowerCase().endsWith('.csv')){
+    Papa.parse(file,{skipEmptyLines:true,delimiter:'',complete:r=>{
+      if(!r.data||r.data.length<2){cb('single',[],[]);return;}
+      let si=0;
+      if(String(r.data[0][0]||'').toLowerCase().startsWith('report')||String(r.data[0][0]||'').toLowerCase().startsWith('assembly'))si=1;
+      const H=r.data[si];
+      const rows=r.data.slice(si+1).map(arr=>{const o={};H.forEach((h,i)=>{o[h]=arr[i]??'';});return o;});
+      cb('single',rows,H);
+    }});
+  } else {
+    const rd=new FileReader();
+    rd.onload=ev=>{
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+        if(isFinOpsWorkbook(wb.SheetNames)){cb('multifinops',parseMultiSheetFinOps(wb),wb.SheetNames);}
+        else{const{rows,H}=sheetToRowsRaw(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}));cb('single',rows,H);}
+      }catch(e){console.error('[CloudDash] XLSX error:',e);cb('single',[],[]);}
+    };
+    rd.readAsArrayBuffer(file);
+  }
+}
+
+// ═══ PROCESS DATA ════════════════════════════════════════════════
+function processData(mode,data,meta,filename){
+  $('uperr').style.display='none';
+  COST=[];FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[],rds:[],lambda:[],network:[],buckets:[],governance:[],other:[]};
+
+  if(mode==='multifinops'){
+    FO.ec2=data.ec2||[];FO.ebs=data.ebs||[];FO.ami=data.ami||[];FO.eip=data.eip||[];FO.snap=data.snap||[];FO.s3=data.s3||[];
+    console.log('[CloudDash] Multi-sheet FinOps:',FO);
+  } else {
+    const rows=data,H=meta;
+    const fmt=detectFmt(H);
+    console.log('[CloudDash] Format:',fmt,'Headers:',H.slice(0,6));
+    if(fmt==='finops_ec2')FO.ec2=parseFinOpsEC2(rows,H);
+    else if(fmt==='finops_ebs')FO.ebs=parseFinOpsEBS(rows,H);
+    else if(fmt==='finops_ami')FO.ami=parseFinOpsAMI(rows,H);
+    else if(fmt==='finops_eip')FO.eip=parseFinOpsEIP(rows,H);
+    else if(fmt==='finops_snap')FO.snap=parseFinOpsSnap(rows,H);
+    else if(fmt==='oci_pivot')COST=parseOCIPivot(rows,H);
+    else if(fmt==='finops_multi'||fmt==='finops_rds'||fmt==='finops_lambda'||
+            fmt==='finops_network'||fmt==='finops_buckets'||fmt==='finops_governance'){
+      // Route rows to the right FO bucket based on resource_type column
+      const generic=parseFinOpsGeneric(rows,H);
+      generic.forEach(r=>{
+        const rt=r._rawType.toLowerCase();
+        if(rt.includes('ec2')||rt.includes('compute')||rt.includes('vm'))FO.ec2.push({...r,_type:'ec2'});
+        else if(rt.includes('rds')||rt.includes('database')||rt.includes('db'))FO.rds.push({...r,_type:'rds'});
+        else if(rt.includes('lambda')||rt.includes('function'))FO.lambda.push({...r,_type:'lambda'});
+        else if(rt.includes('ebs')||rt.includes('disk')||rt.includes('volume')&&!rt.includes('backup'))FO.ebs.push({...r,_type:'ebs'});
+        else if(rt.includes('ami')||rt.includes('image'))FO.ami.push({...r,_type:'ami'});
+        else if(rt.includes('snapshot')||rt.includes('backup'))FO.snap.push({...r,_type:'snap'});
+        else if(rt.includes('eip')||rt.includes('publicip')||rt.includes('public_ip')||rt.includes('ip'))FO.eip.push({...r,_type:'eip'});
+        else if(rt.includes('lb')||rt.includes('loadbalancer')||rt.includes('nat'))FO.network.push({...r,_type:'network'});
+        else if(rt.includes('s3')||rt.includes('blob')||rt.includes('bucket')||rt.includes('object'))FO.buckets.push({...r,_type:'bucket'});
+        else if(rt.includes('governance')||r.missingTags||r.regionFlag)FO.governance.push({...r,_type:'governance'});
+        else FO.other.push({...r,_type:'other'});
+      });
+    }
+    else COST=parseCost(rows,H);
+  }
+
+  const totalFO=FO.ec2.length+FO.ebs.length+FO.ami.length+FO.eip.length+FO.snap.length+FO.s3.length;
+  if(!COST.length&&!totalFO){
+    const H=Array.isArray(meta)?meta:[];const rows=Array.isArray(data)?data:[];
+    showErr(H,rows.length,H.length?detectFmt(H):'desconhecido');return;
+  }
+
+  if(COST.length){
+    const periods=[...new Set(COST.map(r=>r.date.slice(0,7)).filter(Boolean))].sort();
+    $('fpe').innerHTML='<option value="">Todo o período</option>'+periods.map(p=>`<option value="${p}">${p}</option>`).join('');
+  }
+  $('fname').textContent=filename||'';
+  $('upsec').style.display='none';
+  $('dash').style.display='block';
+  $('hdrctrl').style.display='flex';
+  renderAll();
+}
+
+function showErr(H,rowCount,fmt){
+  const prev=H.slice(0,8).join(', ');
+  const tips={generic:`Formato genérico. Precisa de coluna de <b>serviço</b> e <b>custo</b> numérico.<br><br><b>AWS Cost Explorer:</b> Billing → Cost Explorer → gráfico de barras → <b>Download CSV</b>.<br>Colunas: <code>Service, Cost, Region, Start</code>`,aws_ce:`Cost Explorer detectado, mas sem custo > 0. Verifique a coluna <b>Cost</b>.`,aws_cur:`AWS CUR detectado. Verifique <code>lineItem/UnblendedCost</code>.`,azure:`Azure detectado. Verifique <code>CostUSD</code> ou <code>Cost</code>.`,oci:`OCI detectado. Verifique <code>cost/myCost</code>.`,oci_pivot:`OCI Cost Analysis detectado, mas sem valores > 0.`,desconhecido:'Formato não reconhecido.'};
+  $('uperr').innerHTML=`<div class="errbox"><div style="font-weight:700;color:var(--ert);margin-bottom:8px">⚠️ Não foi possível ler os dados</div><div style="font-size:12px;color:var(--ert);line-height:1.9"><b>Formato:</b> ${fmt} &nbsp;|&nbsp; <b>Linhas:</b> ${rowCount}<br><b>Colunas:</b> ${prev||'nenhuma'}<br><br>${tips[fmt]||tips.desconhecido}<br><br>Abra <b>F12 → Console</b> para detalhes.</div></div>`;
+  $('uperr').style.display='block';
+}
+
+$('fi').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;$('uperr').style.display='none';readFile(f,(mode,data,meta)=>processData(mode,data,meta,f.name));});
+const dz=$('dropz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f){$('fi').files=e.dataTransfer.files;$('fi').dispatchEvent(new Event('change'));}});
+
+function resetDash(){
+  COST=[];FO={ec2:[],ebs:[],ami:[],eip:[],snap:[],s3:[],rds:[],lambda:[],network:[],buckets:[],governance:[],other:[]};
+  Object.values(charts).forEach(c=>c&&c.destroy());charts={};
+  $('upsec').style.display='block';$('dash').style.display='none';$('hdrctrl').style.display='none';
+  $('fi').value='';document.querySelector('.tab[onclick*="overview"]').click();
+}
+
+// ═══ FILTER ══════════════════════════════════════════════════════
+function getFilt(){
+  const fp=$('fpe').value;
+  return COST.filter(r=>!fp||r.date.includes(fp));
+}
+
+function renderAll(){
+  const data=getFilt();
+  renderKPIs(data);
+  const at=document.querySelector('.tc.active').id.replace('tc-','');
+  if(at==='overview')renderOverview(data);
+  else if(at==='resources')renderResources(data);
+  else if(at==='finops')renderFinOps(data);
+  else if(at==='recommendations')renderRecs(data);
+  else if(at==='details')renderDetails(data);
+}
+
+function sw(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="${name}"]`).classList.add('active');
+  $('tc-'+name).classList.add('active');
+  const data=getFilt();
+  if(name==='overview')renderOverview(data);
+  else if(name==='resources')renderResources(data);
+  else if(name==='finops')renderFinOps(data);
+  else if(name==='recommendations')renderRecs(data);
+  else if(name==='details')renderDetails(data);
+}
+
+// ═══ KPIs ════════════════════════════════════════════════════════
+function renderKPIs(data){
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const sa=data.reduce((a,r)=>{a[r.service]=(a[r.service]||0)+r.cost;return a},{});
+  const top=Object.entries(sa).sort((a,b)=>b[1]-a[1])[0];
+  const wc=data.filter(r=>r.cpuAvg!=null);
+  const avgCpu=wc.length?wc.reduce((s,r)=>s+r.cpuAvg,0)/wc.length:null;
+  const idle=wc.filter(r=>r.cpuAvg<10).length;
+  const svcCount=[...new Set(data.map(r=>r.service))].length;
+  const foEC2=FO.ec2.length,foEBS=FO.ebs.length,foAMI=FO.ami.length,foEIP=FO.eip.length,foSnap=FO.snap.length;
+  const foWaste=FO.ec2.reduce((s,r)=>s+(r.savUSD||0),0)+FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0)+FO.eip.reduce((s,r)=>s+(r.costUSD||0),0);
+
+  let html='';
+  if(total>0)html+=`<div class="kpi kpi-accent"><div class="kl">Custo total</div><div class="kv">${fmt(total)}</div><div class="ks">${data.length} registros</div></div>`;
+  if(top&&total>0)html+=`<div class="kpi"><div class="kl">Maior categoria</div><div class="kv" style="font-size:15px;line-height:1.3">${top[0]}</div><div class="ks">${fmt(top[1])} · ${((top[1]/total)*100).toFixed(0)}%</div></div>`;
+  if(svcCount>0&&total>0)html+=`<div class="kpi"><div class="kl">Serviços</div><div class="kv">${svcCount}</div><div class="ks">categorias ativas</div></div>`;
+  if(avgCpu!=null)html+=`<div class="kpi ${avgCpu<20?'kpi-er':''}"><div class="kl">CPU médio</div><div class="kv" style="color:${avgCpu<20?'var(--er)':'var(--tx)'}">${pct(avgCpu)}</div><div class="ks">${idle} ociosa(s)</div></div>`;
+  if(foEC2>0)html+=`<div class="kpi kpi-warn"><div class="kl">EC2 analisadas</div><div class="kv">${foEC2}</div><div class="ks">${FO.ec2.filter(r=>r.rec&&r.rec.includes('DOWN')).length} para rightsizing</div></div>`;
+  if(foEBS>0)html+=`<div class="kpi kpi-warn"><div class="kl">EBS soltos</div><div class="kv" style="color:var(--wa)">${foEBS}</div><div class="ks">${fmt(FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0))}/mês</div></div>`;
+  if(foEIP>0)html+=`<div class="kpi kpi-er"><div class="kl">EIPs não assoc.</div><div class="kv" style="color:var(--er)">${foEIP}</div><div class="ks">${fmt(FO.eip.reduce((s,r)=>s+(r.costUSD||0),0))}/mês</div></div>`;
+  if(foAMI>0)html+=`<div class="kpi"><div class="kl">AMIs órfãs</div><div class="kv" style="color:var(--wa)">${foAMI}</div><div class="ks">revisar</div></div>`;
+  if(FO.rds&&FO.rds.length>0){const rdsWaste=FO.rds.reduce((s,r)=>s+(r.savUSD||0),0);if(rdsWaste>0)html+=`<div class="kpi kpi-warn"><div class="kl">RDS</div><div class="kv" style="color:var(--wa)">${FO.rds.length}</div><div class="ks">ec. est. ${fmt(rdsWaste)}/mês</div></div>`;}
+  if(FO.lambda&&FO.lambda.length>0){const noInv=FO.lambda.filter(r=>r.rec==='NO-INVOCATIONS').length;if(noInv>0)html+=`<div class="kpi kpi-warn"><div class="kl">Lambda idle</div><div class="kv" style="color:var(--wa)">${noInv}</div><div class="ks">sem invocações</div></div>`;}
+  if(FO.network&&FO.network.length>0){const netW=FO.network.reduce((s,r)=>s+(r.savUSD||r.costUSD||0),0);if(netW>0)html+=`<div class="kpi kpi-warn"><div class="kl">Rede ociosa</div><div class="kv" style="color:var(--wa)">${FO.network.filter(r=>r.rec==='DELETE-IDLE'||r.rec==='RELEASE').length}</div><div class="ks">${fmt(netW)}/mês</div></div>`;}
+  if(FO.buckets&&FO.buckets.length>0){const noLc=FO.buckets.filter(r=>r.rec==='ADD-LIFECYCLE').length;if(noLc>0)html+=`<div class="kpi kpi-warn"><div class="kl">Buckets s/ lifecycle</div><div class="kv" style="color:var(--wa)">${noLc}</div><div class="ks">de ${FO.buckets.length} total</div></div>`;}
+  if(FO.governance&&FO.governance.length>0){const noT=FO.governance.filter(r=>r.missingTags||r.missingTagsGov).length;if(noT>0)html+=`<div class="kpi"><div class="kl">Sem tags</div><div class="kv" style="color:var(--wa)">${noT}</div><div class="ks">recursos</div></div>`;}
+    if(foWaste>0)html+=`<div class="kpi kpi-er"><div class="kl">Desperdício est.</div><div class="kv" style="color:var(--er);font-size:16px">${fmt(foWaste)}</div><div class="ks">eliminável/mês</div></div>`;
+  $('kgrid').innerHTML=html;
+}
+
+// ═══ CHART HELPERS ════════════════════════════════════════════════
+function buildLeg(id,labels,colors){
+  $(id).innerHTML=labels.slice(0,8).map((l,i)=>`<span><span class="ldot" style="background:${colors[i%colors.length]}"></span>${l}</span>`).join('');
+}
+function gridColor(){return getComputedStyle(document.documentElement).getPropertyValue('--brd').trim()||'rgba(0,0,0,.07)';}
+function tickColor(){return getComputedStyle(document.documentElement).getPropertyValue('--txm').trim()||'#9a9a9a';}
+
+// ═══ OVERVIEW ═════════════════════════════════════════════════════
+function renderOverview(data){
+  if(!data.length){
+    $('tc-overview').innerHTML=`<div class="card"><div class="empty">Sem dados de custo. Carregue um arquivo de Cost Explorer, CUR, Azure, OCI ou use a demonstração.</div></div>`;
+    return;
+  }
+  $('tc-overview').innerHTML=`
+    <div class="g2">
+      <div class="card" style="margin-bottom:0"><div class="ct">Top serviços por custo</div><div id="lg-svc" class="leg"></div><div style="position:relative;height:240px"><canvas id="cSvc"></canvas></div></div>
+      <div class="card" style="margin-bottom:0"><div class="ct">Distribuição por serviço</div><div id="lg-pie" class="leg"></div><div style="position:relative;height:240px"><canvas id="cPie"></canvas></div></div>
+    </div>
+    <div class="card"><div class="ct">Evolução de custo no tempo</div><div id="lg-tm" class="leg"></div><div style="position:relative;height:220px"><canvas id="cTm"></canvas></div></div>
+    <div class="card"><div class="ct">Custo por região</div><div id="lg-rg" class="leg"></div><div style="position:relative;height:200px"><canvas id="cRg"></canvas></div></div>`;
+
+  const sa=data.reduce((a,r)=>{a[r.service]=(a[r.service]||0)+r.cost;return a},{});
+  const topSvc=Object.entries(sa).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const total=data.reduce((s,r)=>s+r.cost,0);
+
+  // ── Horizontal bar (top services) — gradient fill ──────────────
+  buildLeg('lg-svc',topSvc.map(e=>e[0]),PAL);
+  if(charts.svc)charts.svc.destroy();
+  charts.svc=new Chart($('cSvc'),{
+    type:'bar',
+    data:{
+      labels:topSvc.map(e=>e[0]),
+      datasets:[{
+        data:topSvc.map(e=>Math.round(e[1])),
+        backgroundColor:PAL.slice(0,topSvc.length),
+        borderRadius:6,borderSkipped:false,
+        borderWidth:0,
+      }]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:c=>`  ${fmt(c.raw)}  (${((c.raw/total)*100).toFixed(1)}%)`
+        }}
+      },
+      scales:{
+        x:{ticks:{callback:v=>fmtK(v),color:tickColor(),font:{size:10}},grid:{color:gridColor()},border:{display:false}},
+        y:{ticks:{color:tickColor(),font:{size:11}},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+
+  // ── Donut (service distribution) — modern with center label ───
+  const pieData=topSvc.slice(0,8);
+  const otherCost=topSvc.slice(8).reduce((s,e)=>s+e[1],0);
+  if(otherCost>0)pieData.push(['Outros',otherCost]);
+  buildLeg('lg-pie',pieData.map(e=>`${e[0]} ${((e[1]/total)*100).toFixed(0)}%`),PAL);
+  if(charts.pie)charts.pie.destroy();
+  charts.pie=new Chart($('cPie'),{
+    type:'doughnut',
+    data:{
+      labels:pieData.map(e=>e[0]),
+      datasets:[{
+        data:pieData.map(e=>Math.round(e[1])),
+        backgroundColor:PAL.slice(0,pieData.length),
+        borderWidth:2,borderColor:'var(--sur)',
+        hoverOffset:6,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'65%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${fmt(c.raw)} (${((c.raw/total)*100).toFixed(1)}%)`}},
+      },
+      animation:{animateRotate:true,duration:800}
+    },
+    plugins:[{
+      id:'centerLabel',
+      afterDraw(chart){
+        const{ctx,chartArea:{width,height,top,left}}=chart;
+        ctx.save();
+        ctx.font=`700 ${Math.min(width,height)*0.13}px Inter,sans-serif`;
+        ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--tx').trim()||'#0d0d0d';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(fmtK(total),left+width/2,top+height/2-8);
+        ctx.font=`500 ${Math.min(width,height)*0.075}px Inter,sans-serif`;
+        ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--txm').trim()||'#9a9a9a';
+        ctx.fillText('total',left+width/2,top+height/2+14);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // ── Area line (time evolution) — smooth, filled ────────────────
+  const ta={};const svcs=[...new Set(data.map(r=>r.service))];
+  // Group by top 5 services + "Outros" for clarity
+  const top5=topSvc.slice(0,5).map(e=>e[0]);
+  data.forEach(r=>{
+    const p=r.date.slice(0,7)||r.date.slice(0,10)||'s/d';
+    if(!ta[p])ta[p]={};
+    const key=top5.includes(r.service)?r.service:'Outros';
+    ta[p][key]=(ta[p][key]||0)+r.cost;
+  });
+  const periods=Object.keys(ta).sort();
+  const lineKeys=[...top5,'Outros'].filter(k=>periods.some(p=>ta[p][k]>0));
+  buildLeg('lg-tm',lineKeys,PAL);
+  if(charts.tm)charts.tm.destroy();
+  charts.tm=new Chart($('cTm'),{
+    type:'line',
+    data:{
+      labels:periods,
+      datasets:lineKeys.map((k,i)=>({
+        label:k,
+        data:periods.map(p=>Math.round(ta[p][k]||0)),
+        borderColor:PAL[i],
+        backgroundColor:PAL[i]+'18',
+        tension:.35,fill:true,
+        pointRadius:3,pointHoverRadius:6,
+        pointBackgroundColor:PAL[i],
+        borderWidth:2.5,
+      }))
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.raw)}`}}
+      },
+      scales:{
+        x:{ticks:{color:tickColor(),font:{size:10},maxRotation:30,maxTicksLimit:12},grid:{display:false},border:{display:false}},
+        y:{ticks:{callback:v=>fmtK(v),color:tickColor(),font:{size:10}},grid:{color:gridColor()},border:{display:false}}
+      }
+    }
+  });
+
+  // ── Region bar — sorted, colored gradient ──────────────────────
+  const ra=data.reduce((a,r)=>{a[r.region]=(a[r.region]||0)+r.cost;return a},{});
+  const topReg=Object.entries(ra).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  buildLeg('lg-rg',topReg.map(e=>e[0]),MONO_BLUE);
+  if(charts.rg)charts.rg.destroy();
+  charts.rg=new Chart($('cRg'),{
+    type:'bar',
+    data:{
+      labels:topReg.map(e=>e[0]),
+      datasets:[{
+        data:topReg.map(e=>Math.round(e[1])),
+        backgroundColor:topReg.map((_,i)=>MONO_BLUE[Math.min(i,MONO_BLUE.length-1)]),
+        borderRadius:6,borderSkipped:false,borderWidth:0,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`  ${fmt(c.raw)}`}}},
+      scales:{
+        x:{ticks:{color:tickColor(),font:{size:10},maxRotation:30},grid:{display:false},border:{display:false}},
+        y:{ticks:{callback:v=>fmtK(v),color:tickColor(),font:{size:10}},grid:{color:gridColor()},border:{display:false}}
+      }
+    }
+  });
+}
+
+// ═══ RESOURCES ════════════════════════════════════════════════════
+function sbar(val,max,col){const w=Math.max(3,Math.min(100,(val/max)*100));return`<span class="sb"><span class="sbf" style="width:${w}%;background:${col}"></span></span>`;}
+function recBadge(rec){if(!rec)return'<span class="b bin">—</span>';const r=rec.toUpperCase();if(r.includes('STRONG')||r.includes('STOPPED'))return`<span class="b bcr">${rec}</span>`;if(r.includes('DOWN')||r.includes('UPSCALE')||r.includes('REVIEW'))return`<span class="b bwa">${rec}</span>`;if(r.includes('KEEP'))return`<span class="b bok">${rec}</span>`;return`<span class="b bin">${rec}</span>`;}
+function statBadge(r){if(r.state&&(r.state.includes('stop')||r.state.includes('halt')))return{c:'bcr',l:'Parada'};if(r.cpuAvg!=null&&r.cpuAvg<10)return{c:'bcr',l:'Ociosa'};if(r.cpuAvg!=null&&r.cpuAvg<30)return{c:'bwa',l:'Sub-utilizada'};if(r.memAvg!=null&&r.memAvg>85)return{c:'bwa',l:'Mem alta'};if(r.cpuAvg!=null&&r.cpuAvg>85)return{c:'bwa',l:'CPU alta'};if(r.cpuAvg!=null)return{c:'bok',l:'Saudável'};return{c:'bin',l:'—'};}
+
+function renderResources(data){
+  if(FO.ec2.length){renderResourcesEC2();return;}
+  if(!data.length){$('svclist').innerHTML='<div class="card"><div class="empty">Sem dados. Carregue um arquivo de custos ou o CSV do script EC2 FinOps.</div></div>';return;}
+  const agg={};data.forEach(r=>{if(!agg[r.service])agg[r.service]={cost:0,items:[]};agg[r.service].cost+=r.cost;agg[r.service].items.push(r);});
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const sorted=Object.entries(agg).sort((a,b)=>b[1].cost-a[1].cost).slice(0,20);
+  let html='';
+  sorted.forEach(([svc,ag],idx)=>{
+    const share=total>0?((ag.cost/total)*100).toFixed(1):0;
+    const bw=Math.max(4,Math.min(100,(ag.cost/sorted[0][1].cost)*100));
+    const bc=PAL[idx%PAL.length];
+    const items=ag.items;
+    const hc=items.some(r=>r.cpuAvg!=null),hm=items.some(r=>r.memAvg!=null);
+    const ca=items.filter(r=>r.cpuAvg!=null),ma=items.filter(r=>r.memAvg!=null);
+    const ac=ca.length?(ca.reduce((s,r)=>s+r.cpuAvg,0)/ca.length).toFixed(1):null;
+    const am=ma.length?(ma.reduce((s,r)=>s+r.memAvg,0)/ma.length).toFixed(1):null;
+    const idle=ca.filter(r=>r.cpuAvg<10).length,under=ca.filter(r=>r.cpuAvg<30).length;
+    let sb='';
+    if(ac&&parseFloat(ac)<15)sb='<span class="b bcr">CPU crítico</span>';
+    else if(ac&&parseFloat(ac)<30)sb='<span class="b bwa">Subutilizado</span>';
+    else if(hc)sb='<span class="b bok">Saudável</span>';
+    const rows=items.sort((a,b)=>b.cost-a.cost).slice(0,25).map(r=>{
+      const st=statBadge(r);
+      const cpuB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:4px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'—';
+      const memB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:4px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'—';
+      return`<tr><td title="${r.iid||r.service}">${r.iid||r.service}</td>${r.itype?`<td>${r.itype}</td>`:''}<td>${r.region}</td><td style="font-weight:600">${fmt(r.cost)}</td>${hc?`<td>${cpuB}</td>`:''}${hm?`<td>${memB}</td>`:''}<td><span class="b ${st.c}">${st.l}</span></td></tr>`;
+    }).join('');
+    html+=`<div class="scard"><div class="shdr" onclick="togDrill('d${idx}','ch${idx}')">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:700">${svc}</span>${sb}
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="rb"><div class="rbf" style="width:${bw}%;background:${bc}"></div></div>
+          <span style="font-size:13px;font-weight:700;white-space:nowrap">${fmt(ag.cost)}</span>
+          <span style="font-size:11px;color:var(--txm)">${share}%</span>
+          ${ac?`<span style="font-size:11px;color:var(--txs)">CPU ${ac}%</span>`:''}
+          ${am?`<span style="font-size:11px;color:var(--txs)">Mem ${am}%</span>`:''}
+        </div>
+      </div><span class="chev" id="ch${idx}">⌄</span>
+    </div>
+    <div class="drill" id="d${idx}">
+      <div class="dkg">
+        <div class="ds"><div class="dsl">Registros</div><div class="dsv">${items.length}</div></div>
+        ${ac?`<div class="ds"><div class="dsl">CPU médio</div><div class="dsv" style="color:${parseFloat(ac)<20?'var(--er)':'var(--tx)'}">${ac}%</div></div>`:''}
+        ${am?`<div class="ds"><div class="dsl">Mem médio</div><div class="dsv">${am}%</div></div>`:''}
+        ${hc?`<div class="ds"><div class="dsl">Ociosas</div><div class="dsv" style="color:${idle>0?'var(--er)':'var(--tx)'}">${idle}</div></div>`:''}
+        ${hc?`<div class="ds"><div class="dsl">Sub. &lt;30%</div><div class="dsv" style="color:${under>0?'var(--wa)':'var(--tx)'}">${under}</div></div>`:''}
+        <div class="ds"><div class="dsl">% do total</div><div class="dsv">${share}%</div></div>
+      </div>
+      <div class="tbl"><table style="table-layout:fixed"><thead><tr>
+        <th style="width:${items[0]?.iid?'22%':'28%'}">${items[0]?.iid?'ID':'Recurso'}</th>
+        ${items[0]?.itype?'<th style="width:13%">Tipo</th>':''}
+        <th style="width:13%">Região</th><th style="width:11%">Custo</th>
+        ${hc?'<th style="width:14%">CPU%</th>':''}${hm?'<th style="width:14%">Mem%</th>':''}
+        <th style="width:14%">Status</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+    </div></div>`;
+  });
+  $('svclist').innerHTML=html||'<div class="card"><div class="empty">Sem dados.</div></div>';
+}
+
+function renderResourcesEC2(){
+  const items=FO.ec2,total=items.reduce((s,r)=>s+(r.savUSD||0),0);
+  const byRec=items.reduce((a,r)=>{a[r.rec]=(a[r.rec]||0)+1;return a},{});
+  let html=`<div class="sbn"><span style="font-size:28px">🖥️</span><div style="flex:1"><div style="font-size:12px;color:var(--okt);font-weight:700">${items.length} instâncias EC2 analisadas</div><div style="font-size:22px;font-weight:700;color:var(--okt)">${fmt(total)}/mês economia potencial</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${Object.entries(byRec).map(([k,v])=>`<span>${recBadge(k)} <span style="font-size:11px">×${v}</span></span>`).join('')}</div></div></div>`;
+  html+=`<div class="card"><div class="ct">Instâncias EC2 — Rightsizing</div><div class="tbl"><table style="table-layout:fixed"><thead><tr>
+    <th style="width:13%">ID</th><th style="width:10%">Nome</th><th style="width:8%">Estado</th>
+    <th style="width:8%">Tipo</th><th style="width:8%">Região</th>
+    <th style="width:7%">CPU avg</th><th style="width:7%">CPU p95</th>
+    <th style="width:7%">Mem avg</th><th style="width:7%">Disco</th>
+    <th style="width:8%">EBS GB</th><th style="width:8%">Sugerido</th>
+    <th style="width:9%">Recomendação</th>
+  </tr></thead><tbody>`;
+  items.sort((a,b)=>{const o={'DOWNSIZE-STRONG':0,'REVIEW-STOPPED':1,'DOWNSIZE':2,'DOWNSIZE-MEM':3,'UPSCALE/INVESTIGATE':4,'NO-DATA':5,'KEEP':6};return(o[a.rec]??7)-(o[b.rec]??7);}).forEach(r=>{
+    const cB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const mB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const dB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'<span style="color:var(--txm)">N/A</span>';
+    const sc=r.state==='running'?'bok':r.state&&r.state.includes('stop')?'bcr':'bwa';
+    html+=`<tr><td title="${r.id}">${r.id}</td><td title="${r.name}">${r.name||'—'}</td><td><span class="b ${sc}">${r.state||'?'}</span></td><td>${r.itype||'—'}</td><td>${r.region}</td><td>${cB}</td><td style="font-size:11px">${r.cpuP95!=null?pct(r.cpuP95):'N/A'}</td><td>${mB}</td><td>${dB}</td><td>${r.ebsGb!=null?r.ebsGb+' GB':'—'}</td><td style="font-size:11px;color:var(--ok)">${r.suggested||'—'}</td><td>${recBadge(r.rec)}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  $('svclist').innerHTML=html;
+}
+
+function togDrill(id,ci){const el=$(id),ch=$(ci);const op=el.classList.contains('open');document.querySelectorAll('.drill.open').forEach(p=>p.classList.remove('open'));document.querySelectorAll('.chev.open').forEach(c=>c.classList.remove('open'));if(!op){el.classList.add('open');if(ch)ch.classList.add('open');}}
+
+// ═══ FINOPS ═══════════════════════════════════════════════════════
+function renderFinOps(costData){
+  const guide=$('fo-guide'),content=$('fo-content');
+  const hasEC2=FO.ec2.length>0,hasEBS=FO.ebs.length>0,hasAMI=FO.ami.length>0,hasEIP=FO.eip.length>0,hasSnap=FO.snap.length>0;
+  const hasRDS=FO.rds&&FO.rds.length>0,hasLambda=FO.lambda&&FO.lambda.length>0;
+  const hasNetwork=FO.network&&FO.network.length>0,hasBuckets=FO.buckets&&FO.buckets.length>0;
+  const hasGovernance=FO.governance&&FO.governance.length>0;
+  const hasCostMetrics=costData.some(r=>r.cpuAvg!=null);
+  const hasAnyFO=hasEC2||hasEBS||hasAMI||hasEIP||hasSnap||hasRDS||hasLambda||hasNetwork||hasBuckets||hasGovernance;
+  if(!hasAnyFO&&!hasCostMetrics){
+    guide.style.display='block';
+    guide.innerHTML=`<b>📋 Scripts FinOps disponíveis — carregue os CSVs/XLSX gerados:</b><br><br>
+      <b>Compute (EC2/RDS/Lambda/VMs):</b> <code>finops_compute_all.py --cloud aws|azure|oci</code><br>
+      <b>Storage (EBS/AMIs/Snapshots/Discos):</b> <code>finops_storage_all.py</code><br>
+      <b>Rede (EIPs/LBs/NAT):</b> <code>finops_network_all.py</code><br>
+      <b>Buckets (S3/Blob/OCI OS):</b> <code>finops_buckets_all.py</code><br>
+      <b>Governança (Tags/Regiões/Reservas):</b> <code>finops_governance_all.py</code><br>
+      <b>Scripts anteriores:</b> <code>finops_ec2_single_account.py</code> · <code>ebs_ami_eip_snap_todas_regioes.py</code><br><br>
+      Arraste qualquer Excel ou CSV gerado — o dashboard detecta o tipo e popula a seção correta automaticamente.`;
+    content.innerHTML='';if(!hasCostMetrics)return;
+  }else{guide.style.display='none';}
+
+  let html='',totalWaste=0;
+  const EC2_HR=0.10,EBS_GB=0.10,EIP_MO=3.65,SNAP_GB=0.05;
+  if(FO.ec2.length>0){const wEC2=FO.ec2.reduce((s,r)=>s+(r.savUSD||0),0);totalWaste+=wEC2;const stopped=FO.ec2.filter(r=>r.rec==='REVIEW-STOPPED');const strong=FO.ec2.filter(r=>r.rec==='DOWNSIZE-STRONG');const down=FO.ec2.filter(r=>r.rec==='DOWNSIZE');const downMem=FO.ec2.filter(r=>r.rec==='DOWNSIZE-MEM');const upscale=FO.ec2.filter(r=>r.rec&&(r.rec.includes('UPSCALE')));const nodata=FO.ec2.filter(r=>r.rec==='NO-DATA');if(stopped.length)html+=foCards('⛔ EC2 paradas',stopped.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,meta:`Estado: ${r.state} · EBS: ${r.ebsGb!=null?r.ebsGb+' GB':'?'}`,cost:null,sav:r.savUSD,cls:'cr',action:`Faça snapshot e encerre. ${r.notes||''}`})),'cr',stopped.reduce((s,r)=>s+(r.savUSD||0),0));if(strong.length)html+=foCards('🔴 Rightsizing forte — CPU < 10%',strong.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} → ${r.suggested||'?'} · ${r.region}`,meta:`CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · CPU p95: ${r.cpuP95!=null?pct(r.cpuP95):'N/A'} · Mem: ${r.memAvg!=null?pct(r.memAvg):'N/A'}`,cost:null,sav:r.savUSD,cls:'cr',action:`Mudar para ${r.suggested||'tipo menor'}. ${r.notes||''}`})),'cr',strong.reduce((s,r)=>s+(r.savUSD||0),0));if(down.length)html+=foCards('🟠 Rightsizing — CPU 10–30%',down.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} → ${r.suggested||'?'} · ${r.region}`,meta:`CPU avg: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · Mem: ${r.memAvg!=null?pct(r.memAvg):'N/A'}`,cost:null,sav:r.savUSD,cls:'wa',action:`Mudar para ${r.suggested||'tipo menor'}. ${r.notes||''}`})),'wa',down.reduce((s,r)=>s+(r.savUSD||0),0));if(downMem.length)html+=foCards('🟡 Memória alta',downMem.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,meta:`Mem avg: ${r.memAvg!=null?pct(r.memAvg):'N/A'} · CPU: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'}`,cost:null,sav:r.savUSD,cls:'wa',action:`${r.notes||'Avaliar upgrade ou otimização da aplicação.'}`})),'wa',downMem.reduce((s,r)=>s+(r.savUSD||0),0));if(upscale.length)html+=foCards('🔺 CPU alta — avaliar upscale',upscale.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} · CPU: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'}`,meta:`Burstable: ${r.burstable}`,cost:null,sav:null,cls:'wa',action:`${r.notes||'Considere upgrade ou migrar para família non-burstable.'}`})),'wa',0);if(nodata.length)html+=foCards(`ℹ️ Sem métricas CloudWatch (${nodata.length})`,nodata.slice(0,6).map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype} · ${r.region}`,meta:'CPU/Mem não disponíveis — instale o CloudWatch Agent.',cost:null,sav:null,cls:'ok',action:'Instale o CloudWatch Agent.'})),'ok',0);}
+  if(hasEBS){const w=FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;html+=foCards('💾 Volumes EBS não anexados',FO.ebs.map(r=>({name:r.id,sub:`${r.name||''} · ${r.itype||'gp2'} · ${r.gb||'?'} GiB · ${r.az||r.region}`,meta:`Criado: ${r.createTime||'?'} · ${r.ageDays} dias · ${r.encrypted==='true'?'🔒 criptografado':'🔓 não criptografado'}`,cost:r.costUSD,sav:r.costUSD,cls:'wa',action:`${r.rec||'Snapshot e delete.'}`})),'wa',w);}
+  if(hasAMI){html+=foCards('🖼️ AMIs não utilizadas',FO.ami.map(r=>({name:r.id,sub:`${r.name||''} · ${r.arch||'?'} · ${r.region}`,meta:`Criado: ${r.creationDate||'?'} · ${r.ageDays} dias · Snapshots: ${r.snapCount} (${r.totalSnapGb} GiB)`,cost:r.totalSnapGb*SNAP_GB,sav:r.totalSnapGb*SNAP_GB,cls:'wa',action:`${r.rec||'Deregistrar e deletar snapshots associados.'}`})),'wa',FO.ami.reduce((s,r)=>s+r.totalSnapGb*SNAP_GB,0));}
+  if(hasEIP){const w=FO.eip.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;html+=foCards('🌐 IPs Elásticos não associados',FO.eip.map(r=>({name:r.ip||r.id,sub:`Alloc: ${r.id} · ${r.region}`,meta:`Instance: ${r.instanceId||'nenhuma'} · NetInterface: ${r.netIntId||'nenhuma'}`,cost:r.costUSD,sav:r.costUSD,cls:'cr',action:`${r.rec||'Liberar imediatamente. $3.65/mês por IP não associado.'}`})),'cr',w);}
+  if(hasSnap){const orphans=FO.snap.filter(r=>r.amiRelated==='false'||r.amiRelated==='NO'||r.amiRelated===false);const w=FO.snap.reduce((s,r)=>s+(r.costUSD||0),0);totalWaste+=w;html+=foCards(`📸 Snapshots (${orphans.length} órfãos)`,FO.snap.map(r=>({name:r.id,sub:`Volume: ${r.volId||'?'} · ${r.gb} GiB · ${r.region}`,meta:`${r.startTime||'?'} · ${r.ageDays} dias · AMI: ${r.amiRelated==='true'||r.amiRelated==='YES'?'✅ vinculado':'⚠️ órfão'}`,cost:r.costUSD,sav:orphans.includes(r)?r.costUSD:null,cls:orphans.includes(r)?'wa':'ok',action:`${r.rec||'Revisar. Órfãos podem ser deletados.'}`})),'wa',orphans.reduce((s,r)=>s+(r.costUSD||0),0));}
+  if(FO.s3&&FO.s3.length){html+=foCards('🪣 S3 — objetos sem lifecycle',FO.s3.map(r=>({name:r.bucket,sub:`${r.region} · ${r.sampledGiB!=null?r.sampledGiB.toFixed(2)+' GiB':''} amostrados`,meta:`≥90 dias: ${r.objects90d||'?'} objetos (${r.old90pct!=null?r.old90pct.toFixed(1)+'%':'?'})`,cost:null,sav:null,cls:'wa',action:r.suggestion||'Lifecycle Policy: mover ≥90d para Intelligent-Tiering ou Glacier.'})),'wa',0);}
+
+  // ── RDS ────────────────────────────────────────────────────
+  if(FO.rds&&FO.rds.length){
+    const crit=FO.rds.filter(r=>r.priority==='CRITICAL'||r.rec==='DOWNSIZE-STRONG');
+    const down=FO.rds.filter(r=>r.rec==='DOWNSIZE'||r.rec==='LOW-CONNECTIONS');
+    const nodata=FO.rds.filter(r=>r.rec==='NO-DATA');
+    if(crit.length)html+=foCards('🗄️ RDS — baixo uso crítico',crit.map(r=>({
+      name:r.id,sub:`${r.itype||r.platform||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+      meta:`CPU: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · Conexões: ${r.connectionsAvg!=null?r.connectionsAvg.toFixed(0):'N/A'}/avg`,
+      cost:r.costUSD||null,sav:r.savUSD||null,cls:'cr',
+      action:r.notes||'Considere Aurora Serverless v2 ou instância menor.'
+    })),'cr',crit.reduce((s,r)=>s+(r.savUSD||0),0));
+    if(down.length)html+=foCards('🗄️ RDS — subutilizado',down.map(r=>({
+      name:r.id,sub:`${r.itype||'?'} · ${r.region}`,
+      meta:`CPU: ${r.cpuAvg!=null?pct(r.cpuAvg):'N/A'} · Conexões: ${r.connectionsAvg!=null?r.connectionsAvg.toFixed(0):'N/A'}`,
+      cost:r.costUSD||null,sav:r.savUSD||null,cls:'wa',
+      action:r.notes||'Avalie rightsizing ou schedule (pausa no Aurora Serverless).'
+    })),'wa',down.reduce((s,r)=>s+(r.savUSD||0),0));
+    totalWaste+=FO.rds.reduce((s,r)=>s+(r.savUSD||0),0);
+  }
+
+  // ── Lambda ──────────────────────────────────────────────────
+  if(FO.lambda&&FO.lambda.length){
+    const noInv=FO.lambda.filter(r=>r.rec==='NO-INVOCATIONS');
+    const overMem=FO.lambda.filter(r=>r.rec==='OVERPROVISIONED-MEM');
+    const highErr=FO.lambda.filter(r=>r.rec==='HIGH-ERROR-RATE');
+    if(noInv.length)html+=foCards('λ Lambda sem invocações',noInv.map(r=>({
+      name:r.name||r.id,sub:`${r.itype||'?'} · ${r.region}`,
+      meta:`Invocações: 0 · Memória: ${r.lambdaMemMb||'?'}MB`,
+      cost:null,sav:null,cls:'wa',
+      action:r.notes||'Nenhuma chamada em 30d — verifique triggers ou remova.'
+    })),'wa',0);
+    if(overMem.length)html+=foCards('λ Lambda com memória superdimensionada',overMem.map(r=>({
+      name:r.name||r.id,sub:`${r.itype||'?'} · ${r.region} · ${r.lambdaMemMb||'?'}MB`,
+      meta:`Duração avg: ${r.lambdaDurMs!=null?r.lambdaDurMs.toFixed(0)+'ms':'N/A'} · Invocações: ${r.invocations||0}`,
+      cost:null,sav:null,cls:'wa',
+      action:r.notes||'Reduza a memória alocada para reduzir custo por GB-segundo.'
+    })),'wa',0);
+    if(highErr.length)html+=foCards('λ Lambda com taxa de erro alta',highErr.map(r=>({
+      name:r.name||r.id,sub:`${r.itype||'?'} · ${r.region}`,
+      meta:`Erros: ${r.lambdaErrors||0} de ${r.invocations||0} invocações`,
+      cost:null,sav:null,cls:'cr',
+      action:r.notes||'Taxa de erro >10% — investigue logs no CloudWatch.'
+    })),'cr',0);
+  }
+
+  // ── Network (LB + NAT + IPs) ────────────────────────────────
+  if(FO.network&&FO.network.length){
+    const idle=FO.network.filter(r=>r.rec==='DELETE-IDLE'||r.rec==='NO-HEALTHY-TARGETS'||r.rec==='NO-TRAFFIC');
+    const highCost=FO.network.filter(r=>r.rec==='HIGH-COST');
+    if(idle.length){
+      const w=idle.reduce((s,r)=>s+(r.savUSD||r.costUSD||0),0);totalWaste+=w;
+      html+=foCards('🌐 Load Balancers / NAT ociosos',idle.map(r=>({
+        name:r.name||r.id,sub:`${r.rtype||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+        meta:`Targets ativos: ${r.activeTargets!=null?r.activeTargets:'N/A'} · Tráfego: ${r.trafficGb||'0 GB'}`,
+        cost:r.costUSD||null,sav:r.savUSD||r.costUSD||null,cls:'cr',
+        action:r.notes||'Remova o recurso se não estiver em uso.'
+      })),'cr',w);
+    }
+    if(highCost.length){
+      html+=foCards('🌐 NAT Gateway — custo elevado',highCost.map(r=>({
+        name:r.name||r.id,sub:`${r.region} · Tráfego: ${r.trafficGb||'?'}`,
+        meta:`Custo est.: $${r.costUSD||'?'}/mês`,
+        cost:r.costUSD||null,sav:r.savUSD||null,cls:'wa',
+        action:r.notes||'Avalie VPC Endpoints para S3/DynamoDB — eliminam cobrança do NAT.'
+      })),'wa',highCost.reduce((s,r)=>s+(r.savUSD||0),0));
+    }
+  }
+
+  // ── Buckets ─────────────────────────────────────────────────
+  if(FO.buckets&&FO.buckets.length){
+    const noLc=FO.buckets.filter(r=>r.rec==='ADD-LIFECYCLE');
+    const optTiers=FO.buckets.filter(r=>r.rec==='OPTIMIZE-TIERS');
+    const pubBuckets=FO.buckets.filter(r=>r.rec==='REVIEW-PUBLIC');
+    if(noLc.length)html+=foCards('🪣 Buckets sem lifecycle policy',noLc.map(r=>({
+      name:r.name||r.id,sub:`${r.rtype||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+      meta:`Versioning: ${r.versioning||'N/A'} · Objetos ≥90d: ${r.pctGe90d!=null?pct(r.pctGe90d):'N/A'} · ${r.totalSizeGb!=null?r.totalSizeGb.toFixed(1)+' GB':'?'}`,
+      cost:r.costUSD||null,sav:r.savUSD||null,cls:'cr',
+      action:r.notes||'Configure lifecycle: mover objetos ≥90d para Intelligent-Tiering/Glacier/Archive. Com versioning ativo, expire versões antigas.'
+    })),'cr',noLc.reduce((s,r)=>s+(r.savUSD||0),0));
+    if(optTiers.length){
+      const w=optTiers.reduce((s,r)=>s+(r.savUSD||0),0);totalWaste+=w;
+      html+=foCards('🪣 Buckets com objetos candidatos a tier frio',optTiers.map(r=>({
+        name:r.name||r.id,sub:`${r.rtype||'?'} · ${r.region}`,
+        meta:`≥90 dias: ${r.pctGe90d!=null?pct(r.pctGe90d):'N/A'} · ${r.totalSizeGb!=null?r.totalSizeGb.toFixed(1)+' GB':'?'}`,
+        cost:r.costUSD||null,sav:r.savUSD||null,cls:'wa',
+        action:r.notes||'Mover para tier Archive/Glacier pode reduzir custo em 60-80%.'
+      })),'wa',w);
+    }
+    if(pubBuckets.length)html+=foCards('🔓 Buckets com acesso público',pubBuckets.map(r=>({
+      name:r.name||r.id,sub:`${r.rtype||'?'} · ${r.region}`,
+      meta:`Acesso: ${r.publicAccess||'Público'}`,
+      cost:null,sav:null,cls:'cr',
+      action:r.notes||'Revisar permissões — bucket público pode gerar custo inesperado de egress.'
+    })),'cr',0);
+  }
+
+  // ── Governance ──────────────────────────────────────────────
+  if(FO.governance&&FO.governance.length){
+    const noTags=FO.governance.filter(r=>r.missingTags||r.missingTagsGov);
+    const wrongRegion=FO.governance.filter(r=>r.regionFlag==='Inesperada');
+    if(noTags.length)html+=foCards('🏷️ Recursos sem tags obrigatórias',noTags.slice(0,12).map(r=>({
+      name:r.name||r.id,sub:`${r.rtype||r._rawType||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+      meta:`Tags faltantes: ${r.missingTags||r.missingTagsGov}`,
+      cost:null,sav:null,cls:'wa',
+      action:'Adicione tags obrigatórias (owner, env, project, cost-center) para habilitar chargeback e showback.'
+    })),'wa',0);
+    if(wrongRegion.length)html+=foCards('🗺️ Recursos em regiões inesperadas',wrongRegion.map(r=>({
+      name:r.name||r.id,sub:`${r.rtype||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+      meta:`Região ${r.region} não está na lista de regiões esperadas`,
+      cost:null,sav:null,cls:'wa',
+      action:'Verifique se este recurso foi criado intencionalmente nesta região (shadow IT / custo disperso).'
+    })),'wa',0);
+  }
+
+  // ── Other / unclassified ────────────────────────────────────
+  if(FO.other&&FO.other.length>0){
+    const highPrio=FO.other.filter(r=>r.priority==='CRITICAL'||r.priority==='HIGH');
+    if(highPrio.length)html+=foCards('⚠️ Outros recursos — ação necessária',highPrio.map(r=>({
+      name:r.name||r.id,sub:`${r.rtype||r._rawType||'?'} · ${r.region} · ${r.cloud.toUpperCase()}`,
+      meta:`Prioridade: ${r.priority}`,
+      cost:r.costUSD||null,sav:r.savUSD||null,cls:'cr',
+      action:r.notes||r.rec||'Revisar.'
+    })),'cr',highPrio.reduce((s,r)=>s+(r.savUSD||0),0));
+  }
+
+    if(!hasEC2&&hasCostMetrics){const idle=costData.filter(r=>r.cpuAvg!=null&&r.cpuAvg<10);const under=costData.filter(r=>r.cpuAvg!=null&&r.cpuAvg>=10&&r.cpuAvg<30);if(idle.length)html+=foCards('🔴 Instâncias ociosas inferidas (CPU < 10%)',idle.map(r=>({name:r.iid||r.service,sub:`${r.itype||'?'} · CPU: ${pct(r.cpuAvg)}`,meta:`Custo: ${fmt(r.cost)}/mês`,cost:r.cost,sav:r.cost*0.85,cls:'cr',action:'Use o script EC2 para análise detalhada.'})),'cr',idle.reduce((s,r)=>s+r.cost*0.85,0));if(under.length)html+=foCards('🟠 Sub-utilizadas inferidas (CPU 10–30%)',under.map(r=>({name:r.iid||r.service,sub:`${r.itype||'?'} · CPU: ${pct(r.cpuAvg)}`,meta:`Custo: ${fmt(r.cost)}/mês`,cost:r.cost,sav:r.cost*0.35,cls:'wa',action:'Rightsizing — use o script EC2.'})),'wa',under.reduce((s,r)=>s+r.cost*0.35,0));}
+  if(totalWaste>0)html=`<div class="sbn"><span style="font-size:28px">💰</span><div style="flex:1"><div style="font-size:12px;color:var(--okt);font-weight:700">Desperdício total identificado</div><div style="font-size:24px;font-weight:700;color:var(--okt)">${fmt(totalWaste)}/mês</div></div></div>`+html;
+  if(!html)html='<div class="card"><div class="empty">✅ Nenhum recurso ocioso identificado com os dados atuais.</div></div>';
+  content.innerHTML=html;
+}
+function foCards(title,items,cls,waste){
+  if(!items.length)return'';
+  let html=`<div class="fo-sec"><div class="fo-ttl">${title}<span class="b ${cls==='cr'?'bcr':'bwa'}">${items.length}</span>${waste>0?`<span style="font-size:12px;color:var(--ok);font-weight:600">💰 ${fmt(waste)}/mês</span>`:''}</div><div class="fo-grid">`;
+  items.slice(0,12).forEach(it=>{html+=`<div class="fc ${it.cls}"><div class="fn" title="${it.name}">${it.name}</div><div class="fm">${it.sub}</div><div class="fm" style="margin-top:2px">${it.meta}</div>${it.cost!=null&&it.cost>0?`<div class="fcost">${fmt(it.cost)}/mês</div>`:''}${it.sav!=null&&it.sav>0?`<div class="fsav">💰 Economia est. ${fmt(it.sav)}/mês</div>`:''}<div class="fact"><b>Ação:</b> ${it.action}</div></div>`;});
+  if(items.length>12)html+=`<div class="fc" style="display:flex;align-items:center;justify-content:center;color:var(--txm);font-size:12px">+${items.length-12} mais</div>`;
+  html+='</div></div>';return html;
+}
+
+// ═══ RECOMMENDATIONS ══════════════════════════════════════════════
+function renderRecs(data){
+  const total=data.reduce((s,r)=>s+r.cost,0);
+  const agg={};data.forEach(r=>{if(!agg[r.service])agg[r.service]={cost:0,items:[]};agg[r.service].cost+=r.cost;agg[r.service].items.push(r);});
+  const recs=[];
+  if(FO.ec2.length){const strong=FO.ec2.filter(r=>r.rec==='DOWNSIZE-STRONG');const down=FO.ec2.filter(r=>r.rec==='DOWNSIZE');const stopped=FO.ec2.filter(r=>r.rec==='REVIEW-STOPPED');if(stopped.length)recs.push({t:'critical',i:'⛔',title:`${stopped.length} EC2 parada(s)`,desc:`Instâncias paradas cobram EBS. Encerre e faça snapshot.`,sav:stopped.reduce((s,r)=>s+(r.savUSD||0),0)});if(strong.length)recs.push({t:'critical',i:'🔴',title:`${strong.length} EC2 DOWNSIZE-STRONG (CPU < 10%)`,desc:`Tipos sugeridos: ${[...new Set(strong.map(r=>r.suggested).filter(Boolean))].join(', ')||'verificar script'}.`,sav:strong.reduce((s,r)=>s+(r.savUSD||0),0)});if(down.length)recs.push({t:'warning',i:'📉',title:`${down.length} EC2 DOWNSIZE (CPU 10–30%)`,desc:`Tipos sugeridos: ${[...new Set(down.map(r=>r.suggested).filter(Boolean))].join(', ')||'verificar script'}.`,sav:down.reduce((s,r)=>s+(r.savUSD||0),0)});}
+  if(FO.eip.length)recs.push({t:'critical',i:'🌐',title:`${FO.eip.length} IP(s) Elástico(s) não associado(s)`,desc:`$3.65/mês por IP. Libere agora no console EC2.`,sav:FO.eip.reduce((s,r)=>s+(r.costUSD||0),0)});
+  if(FO.ebs.length)recs.push({t:'warning',i:'💾',title:`${FO.ebs.length} volume(s) EBS não anexado(s)`,desc:`Volumes "available" cobram sem uso. Snapshot e delete.`,sav:FO.ebs.reduce((s,r)=>s+(r.costUSD||0),0)});
+  if(FO.snap.length){const o=FO.snap.filter(r=>r.amiRelated==='false'||r.amiRelated==='NO');if(o.length)recs.push({t:'warning',i:'📸',title:`${o.length} snapshot(s) órfão(s)`,desc:`Não vinculados a AMIs ativas. Revise e delete.`,sav:o.reduce((s,r)=>s+(r.costUSD||0),0)});}
+  if(FO.ami.length)recs.push({t:'warning',i:'🖼️',title:`${FO.ami.length} AMI(s) não utilizada(s)`,desc:`Deregistre e delete snapshots. Mantenha últimas 2-3 versões por app.`,sav:FO.ami.reduce((s,r)=>s+r.totalSnapGb*0.05,0)});
+  Object.entries(agg).forEach(([svc,ag])=>{if(ag.cost>total*0.12&&total>0)recs.push({t:'saving',i:'🏷️',title:`Reserved Instances / Savings Plans: ${svc}`,desc:`${((ag.cost/total)*100).toFixed(0)}% do custo total (${fmt(ag.cost)}). RI ou Savings Plans de 1 ano economiza 30–40%.`,sav:ag.cost*0.35});});
+  // RDS
+  if(FO.rds&&FO.rds.length){const cr=FO.rds.filter(r=>r.priority==='CRITICAL');const dw=FO.rds.filter(r=>r.rec==='DOWNSIZE');if(cr.length)recs.push({t:'critical',i:'🗄️',title:`${cr.length} RDS com uso crítico baixo`,desc:`CPU e conexões muito baixas. Considere Aurora Serverless v2 ou instância menor.`,sav:cr.reduce((s,r)=>s+(r.savUSD||0),0)});if(dw.length)recs.push({t:'warning',i:'🗄️',title:`${dw.length} RDS para rightsizing`,desc:`CPU entre 10-30%. Avalie instância menor.`,sav:dw.reduce((s,r)=>s+(r.savUSD||0),0)});}
+  // Lambda
+  if(FO.lambda&&FO.lambda.length){const ni=FO.lambda.filter(r=>r.rec==='NO-INVOCATIONS');if(ni.length)recs.push({t:'warning',i:'λ',title:`${ni.length} Lambda sem invocações em 30d`,desc:`Funções ociosas — revise triggers ou remova.`,sav:0});}
+  // Network
+  if(FO.network&&FO.network.length){const id=FO.network.filter(r=>r.rec==='DELETE-IDLE'||r.rec==='NO-HEALTHY-TARGETS');if(id.length)recs.push({t:'critical',i:'🌐',title:`${id.length} LB/NAT ocioso(s)`,desc:`Sem tráfego ou targets. Remoção imediata elimina custo.`,sav:id.reduce((s,r)=>s+(r.savUSD||r.costUSD||0),0)});}
+  // Buckets
+  if(FO.buckets&&FO.buckets.length){const nl=FO.buckets.filter(r=>r.rec==='ADD-LIFECYCLE');if(nl.length)recs.push({t:'warning',i:'🪣',title:`${nl.length} bucket(s) sem lifecycle policy`,desc:`Objetos acumulam indefinidamente. Configure lifecycle para camadas frias.`,sav:FO.buckets.reduce((s,r)=>s+(r.savUSD||0),0)});}
+  // Governance
+  if(FO.governance&&FO.governance.length){const nt=FO.governance.filter(r=>r.missingTags||r.missingTagsGov);if(nt.length)recs.push({t:'warning',i:'🏷️',title:`${nt.length} recurso(s) sem tags obrigatórias`,desc:`Sem owner/env/project/cost-center é impossível fazer chargeback e showback.`,sav:0});}
+    recs.sort((a,b)=>b.sav-a.sav);
+  const ts=recs.reduce((s,r)=>s+(r.sav||0),0);
+  let html=ts>0?`<div class="sbn"><span style="font-size:32px">💰</span><div style="flex:1"><div style="font-size:12px;color:var(--okt);font-weight:700">Economia potencial total</div><div style="font-size:26px;font-weight:700;color:var(--okt)">${fmt(ts)}/mês</div><div style="font-size:11px;color:var(--okt);opacity:.8">${recs.length} recomendações</div></div></div>`:'';
+  recs.forEach(r=>{html+=`<div class="ri ${r.t}"><div style="display:flex;align-items:flex-start;gap:10px"><span style="font-size:18px;flex-shrink:0">${r.i}</span><div style="flex:1"><div style="font-size:13px;font-weight:700;margin-bottom:4px">${r.title}</div><div style="font-size:12px;color:var(--txs);line-height:1.6">${r.desc}</div>${r.sav>0?`<div style="font-size:12px;color:var(--ok);font-weight:600;margin-top:6px">📉 ${fmt(r.sav)}/mês</div>`:''}</div><span class="b ${r.t==='critical'?'bcr':r.t==='warning'?'bwa':'bok'}" style="flex-shrink:0;margin-left:8px">${r.t==='critical'?'Urgente':r.t==='warning'?'Atenção':'Economia'}</span></div></div>`;});
+  if(!recs.length)html='<div class="card"><div class="empty">✅ Nenhuma recomendação gerada com os dados atuais.</div></div>';
+  $('reclist').innerHTML=html;
+}
+
+// ═══ DETAILS ══════════════════════════════════════════════════════
+function renderDetails(data){
+  if(FO.ec2.length){
+    $('detbody').innerHTML=FO.ec2.sort((a,b)=>{const o={'DOWNSIZE-STRONG':0,'REVIEW-STOPPED':1,'DOWNSIZE':2,'UPSCALE/INVESTIGATE':3,'NO-DATA':4,'KEEP':5};return(o[a.rec]??6)-(o[b.rec]??6);}).map(r=>{
+      const cB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'N/A';
+      const mB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'N/A';
+      const dB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'N/A';
+      const sc=r.state==='running'?'bok':r.state&&r.state.includes('stop')?'bcr':'bwa';
+      return`<tr><td title="${r.id}">${r.id}</td><td>${r.region}</td><td>${r.itype||'—'}</td><td style="font-weight:600">${r.savUSD!=null?fmt(r.savUSD)+'/mês':'—'}</td><td>${cB}</td><td>${mB}</td><td>${dB}</td><td>${recBadge(r.rec)}</td></tr>`;
+    }).join('');
+  } else {
+    $('detbody').innerHTML=data.sort((a,b)=>b.cost-a.cost).slice(0,100).map(r=>{
+      const st=statBadge(r);
+      const cB=r.cpuAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.cpuAvg,100,r.cpuAvg<10?'var(--er)':r.cpuAvg<30?'var(--wa)':'var(--ok)')}<span>${pct(r.cpuAvg)}</span></div>`:'—';
+      const mB=r.memAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.memAvg,100,r.memAvg>85?'var(--er)':r.memAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.memAvg)}</span></div>`:'—';
+      const dB=r.dskAvg!=null?`<div style="display:flex;align-items:center;gap:3px">${sbar(r.dskAvg,100,r.dskAvg>85?'var(--er)':r.dskAvg>70?'var(--wa)':'var(--ok)')}<span>${pct(r.dskAvg)}</span></div>`:'—';
+      return`<tr><td title="${r.iid||r.service}">${r.iid||r.service}</td><td>${r.region}</td><td style="color:var(--txm)">${r.itype||'—'}</td><td style="font-weight:600">${fmt(r.cost)}</td><td>${cB}</td><td>${mB}</td><td>${dB}</td><td><span class="b ${st.c}">${st.l}</span></td></tr>`;
+    }).join('');
+  }
+}
+
+// ═══ DEMO ════════════════════════════════════════════════════════
+function loadDemo(){
+  const svcs=[['AmazonEC2'],['Amazon Relational Database Service'],['Amazon Simple Storage Service'],['AWS Lambda'],['Amazon Elastic Kubernetes Service'],['Amazon CloudFront'],['Amazon Redshift'],['Amazon DynamoDB']];
+  const rows=[];
+  ['2024-10','2024-11','2024-12','2025-01','2025-02','2025-03'].forEach(m=>{
+    svcs.forEach(([svc])=>{
+      rows.push({Service:svc,Cost:(Math.random()*2500+150).toFixed(2),Start:m+'-01',Region:['us-east-1','us-west-2','sa-east-1','eu-west-1'][Math.floor(Math.random()*4)],'Usage Type':svc.includes('EC2')?['t3.medium','m5.xlarge','c5.xlarge'][Math.floor(Math.random()*3)]:null,cpu_avg:svc.includes('EC2')?(Math.random()<0.2?Math.random()*8:Math.random()<0.25?(10+Math.random()*20):(30+Math.random()*55)).toFixed(1):null,mem_avg:svc.includes('EC2')?(20+Math.random()*60).toFixed(1):null,disk_avg:svc.includes('EC2')?(10+Math.random()*70).toFixed(1):null,state:svc.includes('EC2')&&Math.random()<0.08?'stopped':'running'});
+    });
+  });
+  processData('single',rows,['Service','Cost','Start','Region','Usage Type','cpu_avg','mem_avg','disk_avg','state'],'demo.csv');
+}
+</script>
+</body>
+</html>
