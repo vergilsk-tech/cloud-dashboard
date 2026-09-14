@@ -1,0 +1,2500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Cloud FinOps Multicloud</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --surface: #ffffff;
+      --surface-2: #f7f8fa;
+      --border: #e2e5ea;
+      --text: #12141a;
+      --muted: #6b7280;
+      --blue: #155eef;
+      --blue-light: #eef4ff;
+      --orange: #f97316;
+      --green: #059669;
+      --green-light: #ecfdf5;
+      --yellow: #d97706;
+      --yellow-light: #fffbeb;
+      --red: #dc2626;
+      --red-light: #fef2f2;
+      --radius: 14px;
+      --shadow: 0 2px 14px rgba(15, 23, 42, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    button,
+    select,
+    input {
+      font: inherit;
+    }
+
+    header {
+      height: 62px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: linear-gradient(135deg, var(--blue), var(--orange));
+    }
+
+    .container {
+      width: min(1380px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+
+    .upload-container {
+      width: min(850px, 100%);
+      margin: 40px auto;
+    }
+
+    .dropzone {
+      padding: 45px 28px;
+      text-align: center;
+      background: var(--surface);
+      border: 2px dashed #aab1bc;
+      border-radius: 20px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: 0.2s;
+    }
+
+    .dropzone:hover,
+    .dropzone.over {
+      border-color: var(--blue);
+      background: var(--blue-light);
+    }
+
+    .drop-icon {
+      font-size: 44px;
+      margin-bottom: 10px;
+    }
+
+    .dropzone h2 {
+      font-size: 21px;
+      margin-bottom: 7px;
+    }
+
+    .dropzone p {
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .formats {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      text-align: left;
+    }
+
+    .format {
+      padding: 13px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .format strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      padding: 9px 15px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+
+    .btn:hover {
+      border-color: var(--blue);
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: #104dcc;
+    }
+
+    .btn-orange {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: white;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .message {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: var(--red-light);
+      color: var(--red);
+      border: 1px solid #fecaca;
+      display: none;
+    }
+
+    .file-status {
+      margin-top: 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .filter {
+      min-width: 145px;
+      flex: 1;
+    }
+
+    .filter label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .filter select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .kpi {
+      min-height: 108px;
+      padding: 17px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: 4px solid var(--blue);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .kpi.orange {
+      border-top-color: var(--orange);
+    }
+
+    .kpi.green {
+      border-top-color: var(--green);
+    }
+
+    .kpi.red {
+      border-top-color: var(--red);
+    }
+
+    .kpi-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+
+    .kpi-subtitle {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 11px 18px;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      color: var(--blue);
+      border-bottom-color: var(--blue);
+      font-weight: 700;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      padding: 20px;
+      margin-bottom: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .chart-box {
+      height: 270px;
+      position: relative;
+    }
+
+    .rec-summary {
+      padding: 18px 20px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background: var(--green-light);
+      border: 1px solid #6ee7b7;
+      border-radius: var(--radius);
+    }
+
+    .rec-summary strong {
+      color: var(--green);
+      font-size: 23px;
+    }
+
+    .recommendation {
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--yellow);
+      border-radius: 0 12px 12px 0;
+      box-shadow: var(--shadow);
+    }
+
+    .recommendation.critical {
+      border-left-color: var(--red);
+    }
+
+    .recommendation.saving {
+      border-left-color: var(--green);
+    }
+
+    .recommendation-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .recommendation-description {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .recommendation-saving {
+      margin-top: 7px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .badge.aws {
+      background: #fff7ed;
+      color: #c2410c;
+    }
+
+    .badge.azure {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .badge.oci {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    .badge.other {
+      background: #f3f4f6;
+      color: #4b5563;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 650px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 10px;
+      text-align: left;
+      background: var(--surface-2);
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      max-width: 260px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tbody tr:hover {
+      background: var(--surface-2);
+    }
+
+    .empty {
+      padding: 45px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .bar {
+      width: 75px;
+      height: 7px;
+      display: inline-block;
+      margin-right: 5px;
+      background: #e5e7eb;
+      border-radius: 5px;
+      overflow: hidden;
+      vertical-align: middle;
+    }
+
+    .bar span {
+      height: 100%;
+      display: block;
+      background: var(--blue);
+    }
+
+    .notice {
+      margin-bottom: 14px;
+      padding: 13px 16px;
+      background: var(--blue-light);
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+
+    footer {
+      padding: 25px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    @media (max-width: 1050px) {
+      .kpis {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 760px) {
+      header {
+        padding: 0 14px;
+      }
+
+      .container {
+        width: min(100% - 20px, 1380px);
+      }
+
+      .formats,
+      .grid-2,
+      .kpis {
+        grid-template-columns: 1fr;
+      }
+
+      .header-actions {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">☁</div>
+    Cloud FinOps Multicloud
+  </div>
+
+  <div class="header-actions" id="headerActions" hidden>
+    <button class="btn" onclick="chooseMoreFiles()">Adicionar arquivos</button>
+    <button class="btn" onclick="exportCSV()">Exportar consolidado</button>
+    <button class="btn btn-orange" onclick="resetDashboard()">Limpar</button>
+  </div>
+</header>
+
+<main class="container">
+  <section id="uploadSection" class="upload-container">
+    <div
+      id="dropzone"
+      class="dropzone"
+      onclick="document.getElementById('fileInput').click()"
+    >
+      <div class="drop-icon">☁️</div>
+
+      <h2>Carregue os relatórios de custos</h2>
+
+      <p>
+        Você pode selecionar vários arquivos CSV ou Excel das três clouds.
+      </p>
+
+      <button
+        class="btn btn-primary"
+        onclick="event.stopPropagation();document.getElementById('fileInput').click()"
+      >
+        Escolher arquivos
+      </button>
+
+      <div class="formats">
+        <div class="format">
+          <strong>AWS</strong>
+          Cost Explorer, CUR e relatórios com Service, Cost e Region.
+        </div>
+
+        <div class="format">
+          <strong>Azure</strong>
+          Cost Management com CostUSD, ServiceName e ResourceName.
+        </div>
+
+        <div class="format">
+          <strong>OCI</strong>
+          Cost Analysis, Usage Reports e arquivos em formato pivot.
+        </div>
+      </div>
+    </div>
+
+    <input
+      id="fileInput"
+      type="file"
+      accept=".csv,.xlsx,.xls"
+      multiple
+      hidden
+    >
+
+    <div id="uploadMessage" class="message"></div>
+
+    <div class="file-status">
+      Os arquivos são processados localmente e não saem do navegador.
+    </div>
+  </section>
+
+  <section id="dashboard" hidden>
+    <div class="filters">
+      <div class="filter">
+        <label>Cloud</label>
+        <select id="filterCloud" onchange="updateDependentFilters();renderAll()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter">
+        <label>Período</label>
+        <select id="filterPeriod" onchange="renderAll()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filter">
+        <label>Conta / Subscription</label>
+        <select id="filterAccount" onchange="renderAll()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter">
+        <label>Região</label>
+        <select id="filterRegion" onchange="renderAll()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter">
+        <label>Moeda</label>
+        <select id="filterCurrency" onchange="renderAll()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="kpis" class="kpis"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="openTab('overview', this)">
+        📊 Visão geral
+      </button>
+
+      <button class="tab" onclick="openTab('offenders', this)">
+        🔥 Maiores ofensores
+      </button>
+
+      <button class="tab" onclick="openTab('recommendations', this)">
+        💡 Recomendações
+      </button>
+
+      <button class="tab" onclick="openTab('details', this)">
+        📋 Detalhes
+      </button>
+    </div>
+
+    <section id="tab-overview" class="tab-content active">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Top serviços por custo</div>
+          <div class="chart-box">
+            <canvas id="serviceChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Distribuição por cloud</div>
+          <div class="chart-box">
+            <canvas id="cloudChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Evolução do custo</div>
+        <div class="chart-box">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Custo por região</div>
+        <div class="chart-box">
+          <canvas id="regionChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-offenders" class="tab-content">
+      <div class="card">
+        <div class="card-title">Ranking de maiores ofensores</div>
+        <div id="offendersTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section id="tab-recommendations" class="tab-content">
+      <div class="notice">
+        Recomendações de CPU, memória, disco e IP somente são geradas quando o
+        arquivo contém as respectivas métricas ou informações de associação.
+      </div>
+
+      <div id="recommendationsList"></div>
+    </section>
+
+    <section id="tab-details" class="tab-content">
+      <div class="card">
+        <div class="card-title">Dados normalizados</div>
+        <div id="detailsTable" class="table-wrap"></div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<footer>
+  Cloud FinOps Multicloud · AWS · Azure · OCI · Processamento local
+</footer>
+
+<script>
+  let DATA = [];
+  let FILE_NAMES = [];
+  let CHARTS = {};
+
+  const COLORS = [
+    '#155eef',
+    '#f97316',
+    '#059669',
+    '#7c3aed',
+    '#db2777',
+    '#0891b2',
+    '#ca8a04',
+    '#dc2626',
+    '#4f46e5',
+    '#0f766e'
+  ];
+
+  const $ = id => document.getElementById(id);
+
+  function html(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function normalize(value) {
+    return String(value ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function parseNumber(value) {
+    if (typeof value === 'number') return value;
+
+    let text = String(value ?? '').trim();
+
+    if (!text) return NaN;
+
+    const negative = /^\(.*\)$/.test(text);
+
+    text = text
+      .replace(/[()]/g, '')
+      .replace(/[^\d,.\-]/g, '');
+
+    const comma = text.lastIndexOf(',');
+    const dot = text.lastIndexOf('.');
+
+    if (comma >= 0 && dot >= 0) {
+      if (comma > dot) {
+        text = text.replace(/\./g, '').replace(',', '.');
+      } else {
+        text = text.replace(/,/g, '');
+      }
+    } else if (comma >= 0) {
+      const decimalPlaces = text.length - comma - 1;
+
+      text = decimalPlaces <= 4
+        ? text.replace(/\./g, '').replace(',', '.')
+        : text.replace(/,/g, '');
+    } else if ((text.match(/\./g) || []).length > 1) {
+      const parts = text.split('.');
+      const last = parts.pop();
+
+      text = last.length <= 4
+        ? `${parts.join('')}.${last}`
+        : `${parts.join('')}${last}`;
+    }
+
+    const number = Number(text);
+
+    return negative ? -number : number;
+  }
+
+  function parseMetric(value) {
+    if (value === '' || value === null || value === undefined) return null;
+
+    const number = parseNumber(value);
+
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function parseDate(value) {
+    if (!value) return '';
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'number' && value > 20000 && value < 80000) {
+      const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+      return date.toISOString().slice(0, 10);
+    }
+
+    const text = String(value).trim();
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+      return text.slice(0, 10);
+    }
+
+    let match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+
+    if (match) {
+      return `${match[3]}-${match[2]}-${match[1]}`;
+    }
+
+    match = text.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+
+    if (match) {
+      return `${match[1]}-${match[2]}-${match[3]}`;
+    }
+
+    const date = new Date(text);
+
+    return Number.isNaN(date.getTime())
+      ? ''
+      : date.toISOString().slice(0, 10);
+  }
+
+  function findColumn(headers, candidates) {
+    const normalizedHeaders = headers.map(normalize);
+
+    for (const candidate of candidates) {
+      const target = normalize(candidate);
+      let index = normalizedHeaders.indexOf(target);
+
+      if (index >= 0) return headers[index];
+
+      index = normalizedHeaders.findIndex(header =>
+        header.includes(target) || target.includes(header)
+      );
+
+      if (index >= 0) return headers[index];
+    }
+
+    return null;
+  }
+
+  function hasColumn(headers, candidates) {
+    return Boolean(findColumn(headers, candidates));
+  }
+
+  function value(row, column) {
+    return column ? row[column] ?? '' : '';
+  }
+
+  function money(number, currency) {
+    let safeCurrency = currency || $('filterCurrency').value || 'USD';
+
+    if (!['USD', 'BRL', 'EUR'].includes(safeCurrency)) {
+      safeCurrency = 'USD';
+    }
+
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: safeCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(Number(number) || 0);
+  }
+
+  function shortMoney(number) {
+    const value = Number(number) || 0;
+
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
+
+    return `$${value.toFixed(0)}`;
+  }
+
+  function percentage(number) {
+    return `${(Number(number) || 0).toFixed(1)}%`;
+  }
+
+  function friendlyService(service) {
+    const names = {
+      'amazon elastic compute cloud': 'EC2',
+      'amazonec2': 'EC2',
+      'amazon simple storage service': 'S3',
+      'amazons3': 'S3',
+      'amazon relational database service': 'RDS',
+      'aws lambda': 'Lambda',
+      'amazon cloudfront': 'CloudFront',
+      'amazon elastic kubernetes service': 'EKS',
+      'amazon elastic load balancing': 'ELB',
+      'amazon virtual private cloud': 'VPC',
+      'aws data transfer': 'Data Transfer',
+      'virtual machines': 'Virtual Machines',
+      'azure sql database': 'Azure SQL',
+      'storage accounts': 'Storage Account',
+      'azure kubernetes service': 'AKS'
+    };
+
+    const original = String(service || 'Sem serviço').trim();
+    const key = original.toLowerCase().replace(/\s+/g, ' ');
+
+    return names[key] || names[key.replace(/\s/g, '')] || original;
+  }
+
+  function detectFormat(headers) {
+    const normalized = headers.map(normalize);
+
+    const has = candidates =>
+      candidates.some(candidate => normalized.includes(normalize(candidate)));
+
+    const startsWith = prefixes =>
+      headers.some(header =>
+        prefixes.some(prefix =>
+          String(header).toLowerCase().startsWith(prefix.toLowerCase())
+        )
+      );
+
+    const dateColumns = headers.filter(header =>
+      /^\d{4}-\d{2}(-\d{2})?$/.test(String(header).trim())
+    );
+
+    if (
+      normalize(headers[0]) === 'service' &&
+      dateColumns.length
+    ) {
+      return 'aws_pivot';
+    }
+
+    if (
+      startsWith(['lineItem/', 'bill/']) ||
+      has(['lineItem/UnblendedCost', 'lineItem/UsageAccountId'])
+    ) {
+      return 'aws_cur';
+    }
+
+    if (
+      has(['SubscriptionId', 'SubscriptionName', 'ResourceGroup']) ||
+      has(['CostUSD', 'CostInUSD', 'CostInBillingCurrency']) ||
+      has(['MeterCategory', 'ConsumedService', 'ResourceLocation'])
+    ) {
+      return 'azure';
+    }
+
+    if (
+      startsWith(['cost/']) ||
+      (
+        has(['TenancyName', 'CompartmentName', 'TenancyId']) &&
+        has(['MyCost', 'ComputedAmount', 'Cost'])
+      )
+    ) {
+      return 'oci';
+    }
+
+    if (
+      normalize(headers[0]) === 'dateutc' &&
+      normalize(headers[headers.length - 1]) === 'total'
+    ) {
+      return 'oci_pivot';
+    }
+
+    if (
+      has(['Service', 'ServiceName']) &&
+      has([
+        'Cost',
+        'UnblendedCost',
+        'AmortizedCost',
+        'NetUnblendedCost'
+      ])
+    ) {
+      return 'aws_ce';
+    }
+
+    return 'generic';
+  }
+
+  const MAPS = {
+    aws_cur: {
+      service: [
+        'product/ProductName',
+        'lineItem/ProductCode',
+        'product/servicename'
+      ],
+      cost: [
+        'lineItem/NetUnblendedCost',
+        'lineItem/UnblendedCost',
+        'lineItem/BlendedCost',
+        'lineItem/NetAmortizedCost'
+      ],
+      date: [
+        'lineItem/UsageStartDate',
+        'bill/BillingPeriodStartDate'
+      ],
+      region: [
+        'product/region',
+        'product/location',
+        'lineItem/AvailabilityZone'
+      ],
+      account: [
+        'lineItem/UsageAccountName',
+        'lineItem/UsageAccountId',
+        'bill/PayerAccountId'
+      ],
+      resource: ['lineItem/ResourceId'],
+      type: [
+        'product/instanceType',
+        'lineItem/UsageType',
+        'lineItem/Operation'
+      ],
+      currency: [
+        'pricing/currency',
+        'bill/BillingCurrency'
+      ]
+    },
+
+    aws_ce: {
+      service: ['Service', 'Service name'],
+      cost: [
+        'Net amortized cost',
+        'Amortized cost',
+        'Net unblended cost',
+        'Unblended cost',
+        'Blended cost',
+        'Cost'
+      ],
+      date: ['Start', 'Date', 'Usage date', 'Period'],
+      region: ['Region', 'Availability Zone'],
+      account: ['Linked account', 'Linked account name', 'Account'],
+      resource: ['Resource', 'Resource ID'],
+      type: ['Usage type', 'Instance type', 'Operation'],
+      currency: ['Currency']
+    },
+
+    azure: {
+      service: [
+        'ServiceName',
+        'Service name',
+        'MeterCategory',
+        'ConsumedService',
+        'ResourceType'
+      ],
+      cost: [
+        'CostUSD',
+        'CostInUSD',
+        'CostInBillingCurrency',
+        'Cost',
+        'PreTaxCost'
+      ],
+      date: [
+        'Date',
+        'UsageDateTime',
+        'BillingMonth',
+        'ChargePeriodStart'
+      ],
+      region: [
+        'ResourceLocation',
+        'Resource location',
+        'Location'
+      ],
+      account: [
+        'SubscriptionName',
+        'SubscriptionId',
+        'BillingAccountName'
+      ],
+      resource: [
+        'ResourceName',
+        'ResourceId',
+        'Resource ID'
+      ],
+      type: [
+        'ResourceType',
+        'MeterSubCategory',
+        'SkuName',
+        'MeterName'
+      ],
+      currency: ['BillingCurrency', 'Currency']
+    },
+
+    oci: {
+      service: [
+        'product/service',
+        'product/resourceType',
+        'Service',
+        'Service Name'
+      ],
+      cost: [
+        'cost/myCost',
+        'My Cost',
+        'Computed Amount',
+        'Cost'
+      ],
+      date: [
+        'lineItem/intervalUsageStart',
+        'Usage Start',
+        'Date'
+      ],
+      region: [
+        'product/region',
+        'lineItem/canonicalRegionName',
+        'Region'
+      ],
+      account: [
+        'Tenancy Name',
+        'Tenant Name',
+        'Compartment Name',
+        'Subscription ID'
+      ],
+      resource: [
+        'lineItem/resourceId',
+        'Resource ID',
+        'Resource Name'
+      ],
+      type: [
+        'product/shape',
+        'product/sku',
+        'product/resourceType'
+      ],
+      currency: ['cost/currencyCode', 'Currency']
+    },
+
+    generic: {
+      service: [
+        'Service',
+        'ServiceName',
+        'Serviço',
+        'Produto',
+        'Product',
+        'MeterCategory'
+      ],
+      cost: [
+        'CostUSD',
+        'CostInUSD',
+        'Cost',
+        'Custo',
+        'Amount',
+        'Value',
+        'Total'
+      ],
+      date: ['Date', 'Data', 'Month', 'Mês', 'Period', 'Start'],
+      region: ['Region', 'Região', 'Location', 'ResourceLocation'],
+      account: [
+        'Account',
+        'AccountName',
+        'SubscriptionName',
+        'CompartmentName',
+        'TenancyName'
+      ],
+      resource: [
+        'Resource',
+        'ResourceId',
+        'ResourceName',
+        'InstanceId'
+      ],
+      type: ['Type', 'ResourceType', 'Sku', 'UsageType'],
+      currency: ['Currency', 'BillingCurrency']
+    }
+  };
+
+  function resolveColumns(headers, format) {
+    const specific = MAPS[format] || MAPS.generic;
+    const generic = MAPS.generic;
+    const columns = {};
+
+    Object.keys(generic).forEach(key => {
+      columns[key] =
+        findColumn(headers, specific[key] || []) ||
+        findColumn(headers, generic[key] || []);
+    });
+
+    columns.cpu = findColumn(headers, [
+      'cpu_avg',
+      'CPUAvg',
+      'AvgCPU%_30d',
+      'CPUUtilization',
+      'AverageCPU'
+    ]);
+
+    columns.memory = findColumn(headers, [
+      'mem_avg',
+      'memory_avg',
+      'MemoryUtilization',
+      'AverageMemory'
+    ]);
+
+    columns.diskUsage = findColumn(headers, [
+      'disk_avg',
+      'disk_used_percent',
+      'DiskUtilization',
+      'DiskUsedPercent'
+    ]);
+
+    columns.state = findColumn(headers, [
+      'State',
+      'Status',
+      'ResourceState',
+      'ProvisioningState'
+    ]);
+
+    columns.attached = findColumn(headers, [
+      'Attached',
+      'IsAttached',
+      'AttachmentState',
+      'ManagedBy',
+      'AttachedTo'
+    ]);
+
+    columns.association = findColumn(headers, [
+      'AssociationId',
+      'Association',
+      'AssociatedResource',
+      'NetworkInterfaceId'
+    ]);
+
+    columns.storageGB = findColumn(headers, [
+      'SizeGiB',
+      'SizeGB',
+      'DiskSizeGB',
+      'VolumeSizeGiB',
+      'StorageGB'
+    ]);
+
+    columns.tags = findColumn(headers, [
+      'Tags',
+      'ResourceTags',
+      'PresentTags'
+    ]);
+
+    return columns;
+  }
+
+  function inferCloud(format, row, headers) {
+    if (format.startsWith('aws')) return 'aws';
+    if (format === 'azure') return 'azure';
+    if (format.startsWith('oci')) return 'oci';
+
+    const cloudColumn = findColumn(headers, ['Cloud', 'Provider']);
+    const cloud = String(value(row, cloudColumn)).toLowerCase();
+
+    if (cloud.includes('azure')) return 'azure';
+    if (cloud.includes('oci') || cloud.includes('oracle')) return 'oci';
+    if (cloud.includes('aws') || cloud.includes('amazon')) return 'aws';
+
+    return 'other';
+  }
+
+  function inferCurrency(row, columns) {
+    if (normalize(columns.cost).includes('usd')) return 'USD';
+
+    const currency = String(value(row, columns.currency))
+      .trim()
+      .toUpperCase();
+
+    return currency || 'USD';
+  }
+
+  function parseStandardRows(rows, headers, format, fileName, sheetName) {
+    const columns = resolveColumns(headers, format);
+
+    if (!columns.service || !columns.cost) return [];
+
+    return rows.map(row => {
+      const cost = parseNumber(value(row, columns.cost));
+
+      if (!Number.isFinite(cost) || cost === 0) return null;
+
+      const date = parseDate(value(row, columns.date));
+
+      return {
+        cloud: inferCloud(format, row, headers),
+        service: friendlyService(value(row, columns.service)),
+        cost,
+        currency: inferCurrency(row, columns),
+        date,
+        period: date.slice(0, 7),
+        account: String(
+          value(row, columns.account) || 'Não informado'
+        ).trim(),
+        region: String(
+          value(row, columns.region) || 'Global'
+        ).trim(),
+        resource: String(
+          value(row, columns.resource) || ''
+        ).trim(),
+        resourceType: String(
+          value(row, columns.type) || ''
+        ).trim(),
+        cpu: parseMetric(value(row, columns.cpu)),
+        memory: parseMetric(value(row, columns.memory)),
+        diskUsage: parseMetric(value(row, columns.diskUsage)),
+        state: String(value(row, columns.state))
+          .trim()
+          .toLowerCase(),
+        attached: String(value(row, columns.attached))
+          .trim()
+          .toLowerCase(),
+        association: String(value(row, columns.association)).trim(),
+        storageGB: parseMetric(value(row, columns.storageGB)),
+        tags: String(value(row, columns.tags)).trim(),
+        hasStateInfo: Boolean(columns.state),
+        hasAttachedInfo: Boolean(columns.attached),
+        hasAssociationInfo: Boolean(columns.association),
+        hasTagInfo: Boolean(columns.tags),
+        sourceFile: fileName,
+        sourceSheet: sheetName,
+        sourceFormat: format
+      };
+    }).filter(Boolean);
+  }
+
+  function parseAWSPivot(rows, headers, fileName, sheetName) {
+    const serviceColumn = headers[0];
+
+    const dateColumns = headers.filter(header =>
+      /^\d{4}-\d{2}(-\d{2})?$/.test(String(header).trim())
+    );
+
+    const output = [];
+
+    rows.forEach(row => {
+      const service = friendlyService(value(row, serviceColumn));
+
+      dateColumns.forEach(column => {
+        const cost = parseNumber(value(row, column));
+
+        if (!Number.isFinite(cost) || cost === 0) return;
+
+        const date = String(column).length === 7
+          ? `${column}-01`
+          : String(column).slice(0, 10);
+
+        output.push({
+          cloud: 'aws',
+          service,
+          cost,
+          currency: 'USD',
+          date,
+          period: date.slice(0, 7),
+          account: 'Não informado',
+          region: 'Global',
+          resource: '',
+          resourceType: '',
+          cpu: null,
+          memory: null,
+          diskUsage: null,
+          state: '',
+          attached: '',
+          association: '',
+          storageGB: null,
+          tags: '',
+          hasStateInfo: false,
+          hasAttachedInfo: false,
+          hasAssociationInfo: false,
+          hasTagInfo: false,
+          sourceFile: fileName,
+          sourceSheet: sheetName,
+          sourceFormat: 'aws_pivot'
+        });
+      });
+    });
+
+    return output;
+  }
+
+  function parseOCIPivot(rows, headers, fileName, sheetName) {
+    const dateColumn = headers[0];
+    const serviceColumns = headers.slice(1, -1);
+    const output = [];
+
+    rows.forEach(row => {
+      const date = parseDate(value(row, dateColumn));
+
+      serviceColumns.forEach(column => {
+        const cost = parseNumber(value(row, column));
+
+        if (!Number.isFinite(cost) || cost === 0) return;
+
+        const parts = String(column).split(' / ');
+
+        output.push({
+          cloud: 'oci',
+          service: friendlyService(parts[0]),
+          cost,
+          currency: 'USD',
+          date,
+          period: date.slice(0, 7),
+          account: parts[1] || 'Não informado',
+          region: 'Global',
+          resource: '',
+          resourceType: parts[2] || '',
+          cpu: null,
+          memory: null,
+          diskUsage: null,
+          state: '',
+          attached: '',
+          association: '',
+          storageGB: null,
+          tags: '',
+          hasStateInfo: false,
+          hasAttachedInfo: false,
+          hasAssociationInfo: false,
+          hasTagInfo: false,
+          sourceFile: fileName,
+          sourceSheet: sheetName,
+          sourceFormat: 'oci_pivot'
+        });
+      });
+    });
+
+    return output;
+  }
+
+  function matrixToRows(matrix) {
+    if (!matrix || matrix.length < 2) {
+      return { headers: [], rows: [] };
+    }
+
+    let headerIndex = 0;
+    let highestScore = 0;
+
+    for (let index = 0; index < Math.min(matrix.length, 15); index++) {
+      const score = (matrix[index] || []).filter(cell =>
+        cell !== '' && cell !== null && cell !== undefined
+      ).length;
+
+      if (score > highestScore) {
+        headerIndex = index;
+        highestScore = score;
+      }
+    }
+
+    const headers = (matrix[headerIndex] || []).map((header, index) =>
+      String(header ?? '').trim() || `Coluna_${index + 1}`
+    );
+
+    const rows = matrix
+      .slice(headerIndex + 1)
+      .filter(row => row.some(cell =>
+        cell !== '' && cell !== null && cell !== undefined
+      ))
+      .map(cells => {
+        const row = {};
+
+        headers.forEach((header, index) => {
+          row[header] = cells[index] ?? '';
+        });
+
+        return row;
+      });
+
+    return { headers, rows };
+  }
+
+  function readCSV(file) {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        skipEmptyLines: true,
+
+        complete(result) {
+          resolve([{
+            ...matrixToRows(result.data),
+            sheetName: 'CSV'
+          }]);
+        },
+
+        error(error) {
+          reject(error);
+        }
+      });
+    });
+  }
+
+  function readExcel(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = event => {
+        try {
+          const workbook = XLSX.read(event.target.result, {
+            type: 'array',
+            cellDates: true
+          });
+
+          const sheets = workbook.SheetNames.map(sheetName => {
+            const matrix = XLSX.utils.sheet_to_json(
+              workbook.Sheets[sheetName],
+              {
+                header: 1,
+                defval: '',
+                raw: true
+              }
+            );
+
+            return {
+              ...matrixToRows(matrix),
+              sheetName
+            };
+          });
+
+          resolve(sheets);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function parseFile(file) {
+    const sheets = file.name.toLowerCase().endsWith('.csv')
+      ? await readCSV(file)
+      : await readExcel(file);
+
+    const output = [];
+
+    sheets.forEach(sheet => {
+      if (!sheet.headers.length || !sheet.rows.length) return;
+
+      const format = detectFormat(sheet.headers);
+      let rows = [];
+
+      if (format === 'aws_pivot') {
+        rows = parseAWSPivot(
+          sheet.rows,
+          sheet.headers,
+          file.name,
+          sheet.sheetName
+        );
+      } else if (format === 'oci_pivot') {
+        rows = parseOCIPivot(
+          sheet.rows,
+          sheet.headers,
+          file.name,
+          sheet.sheetName
+        );
+      } else {
+        rows = parseStandardRows(
+          sheet.rows,
+          sheet.headers,
+          format,
+          file.name,
+          sheet.sheetName
+        );
+      }
+
+      console.log({
+        arquivo: file.name,
+        aba: sheet.sheetName,
+        formato: format,
+        linhasOriginais: sheet.rows.length,
+        linhasImportadas: rows.length,
+        colunas: sheet.headers
+      });
+
+      output.push(...rows);
+    });
+
+    return output;
+  }
+
+  async function processFiles(files) {
+    const selectedFiles = [...files];
+
+    if (!selectedFiles.length) return;
+
+    showMessage('');
+
+    try {
+      const results = await Promise.all(selectedFiles.map(parseFile));
+      const imported = results.flat();
+
+      if (!imported.length) {
+        showMessage(
+          'Nenhuma linha de custo foi encontrada. Verifique se o arquivo possui colunas de serviço e custo. Abra F12 → Console para consultar as colunas detectadas.'
+        );
+        return;
+      }
+
+      DATA.push(...imported);
+      FILE_NAMES.push(...selectedFiles.map(file => file.name));
+
+      $('uploadSection').hidden = true;
+      $('dashboard').hidden = false;
+      $('headerActions').hidden = false;
+
+      populateFilters();
+      renderAll();
+    } catch (error) {
+      console.error(error);
+      showMessage(`Erro ao processar o arquivo: ${error.message}`);
+    }
+  }
+
+  function showMessage(message) {
+    $('uploadMessage').textContent = message;
+    $('uploadMessage').style.display = message ? 'block' : 'none';
+  }
+
+  function setOptions(id, values, allLabel) {
+    const select = $(id);
+    const current = select.value;
+    const unique = [...new Set(values.filter(Boolean))].sort();
+
+    select.innerHTML =
+      `<option value="">${allLabel}</option>` +
+      unique.map(item =>
+        `<option value="${html(item)}">${html(item)}</option>`
+      ).join('');
+
+    if (unique.includes(current)) select.value = current;
+  }
+
+  function populateFilters() {
+    setOptions(
+      'filterCloud',
+      DATA.map(row => row.cloud),
+      'Todas'
+    );
+
+    setOptions(
+      'filterPeriod',
+      DATA.map(row => row.period),
+      'Todos'
+    );
+
+    setOptions(
+      'filterAccount',
+      DATA.map(row => row.account),
+      'Todas'
+    );
+
+    setOptions(
+      'filterRegion',
+      DATA.map(row => row.region),
+      'Todas'
+    );
+
+    setOptions(
+      'filterCurrency',
+      DATA.map(row => row.currency),
+      'Todas'
+    );
+
+    const currencies = [...new Set(DATA.map(row => row.currency))];
+
+    if (!$('filterCurrency').value) {
+      if (currencies.includes('USD')) {
+        $('filterCurrency').value = 'USD';
+      } else if (currencies.length === 1) {
+        $('filterCurrency').value = currencies[0];
+      }
+    }
+  }
+
+  function updateDependentFilters() {
+    const cloud = $('filterCloud').value;
+    const base = DATA.filter(row => !cloud || row.cloud === cloud);
+
+    setOptions(
+      'filterAccount',
+      base.map(row => row.account),
+      'Todas'
+    );
+
+    setOptions(
+      'filterRegion',
+      base.map(row => row.region),
+      'Todas'
+    );
+  }
+
+  function filteredData() {
+    const cloud = $('filterCloud').value;
+    const period = $('filterPeriod').value;
+    const account = $('filterAccount').value;
+    const region = $('filterRegion').value;
+    const currency = $('filterCurrency').value;
+
+    return DATA.filter(row =>
+      (!cloud || row.cloud === cloud) &&
+      (!period || row.period === period) &&
+      (!account || row.account === account) &&
+      (!region || row.region === region) &&
+      (!currency || row.currency === currency)
+    );
+  }
+
+  function aggregate(data, field) {
+    return Object.entries(
+      data.reduce((result, row) => {
+        const key = row[field] || 'Não informado';
+        result[key] = (result[key] || 0) + row.cost;
+        return result;
+      }, {})
+    ).sort((a, b) => b[1] - a[1]);
+  }
+
+  function renderKPIs(data) {
+    const total = data.reduce((sum, row) => sum + row.cost, 0);
+    const topService = aggregate(data, 'service')[0];
+    const topCloud = aggregate(data, 'cloud')[0];
+
+    const resources = new Set(
+      data.map(row => row.resource).filter(Boolean)
+    ).size;
+
+    const accounts = new Set(
+      data.map(row => row.account).filter(Boolean)
+    ).size;
+
+    const recommendations = createRecommendations(data);
+
+    $('kpis').innerHTML = `
+      <div class="kpi">
+        <div class="kpi-label">Custo total</div>
+        <div class="kpi-value">${money(total)}</div>
+        <div class="kpi-subtitle">${data.length} registros</div>
+      </div>
+
+      <div class="kpi orange">
+        <div class="kpi-label">Maior ofensor</div>
+        <div class="kpi-value" style="font-size:16px">
+          ${html(topService?.[0] || '—')}
+        </div>
+        <div class="kpi-subtitle">
+          ${topService ? money(topService[1]) : '—'}
+          ${topService && total > 0
+            ? ` · ${((topService[1] / total) * 100).toFixed(1)}%`
+            : ''}
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-label">Cloud principal</div>
+        <div class="kpi-value" style="text-transform:uppercase">
+          ${html(topCloud?.[0] || '—')}
+        </div>
+        <div class="kpi-subtitle">
+          ${topCloud ? money(topCloud[1]) : '—'}
+        </div>
+      </div>
+
+      <div class="kpi green">
+        <div class="kpi-label">Contas / recursos</div>
+        <div class="kpi-value">${accounts} / ${resources}</div>
+        <div class="kpi-subtitle">
+          contas e recursos identificados
+        </div>
+      </div>
+
+      <div class="kpi red">
+        <div class="kpi-label">Recomendações</div>
+        <div class="kpi-value">${recommendations.length}</div>
+        <div class="kpi-subtitle">
+          baseadas nas informações disponíveis
+        </div>
+      </div>
+    `;
+  }
+
+  function destroyChart(name) {
+    if (CHARTS[name]) {
+      CHARTS[name].destroy();
+      delete CHARTS[name];
+    }
+  }
+
+  function createBarChart(id, name, entries, horizontal = false) {
+    destroyChart(name);
+
+    CHARTS[name] = new Chart($(id), {
+      type: 'bar',
+      data: {
+        labels: entries.map(item => item[0]),
+        datasets: [{
+          data: entries.map(item => item[1]),
+          backgroundColor: entries.map(
+            (_, index) => COLORS[index % COLORS.length]
+          ),
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: horizontal ? 'y' : 'x',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: context => money(context.raw)
+            }
+          }
+        },
+        scales: {
+          y: horizontal
+            ? { grid: { display: false } }
+            : {
+                beginAtZero: true,
+                ticks: { callback: shortMoney }
+              },
+
+          x: horizontal
+            ? {
+                beginAtZero: true,
+                ticks: { callback: shortMoney }
+              }
+            : { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  function renderCharts(data) {
+    const service = aggregate(data, 'service').slice(0, 10);
+    const cloud = aggregate(data, 'cloud');
+    const region = aggregate(data, 'region').slice(0, 10);
+
+    createBarChart(
+      'serviceChart',
+      'service',
+      service,
+      true
+    );
+
+    destroyChart('cloud');
+
+    CHARTS.cloud = new Chart($('cloudChart'), {
+      type: 'doughnut',
+      data: {
+        labels: cloud.map(item => item[0].toUpperCase()),
+        datasets: [{
+          data: cloud.map(item => item[1]),
+          backgroundColor: ['#f97316', '#155eef', '#dc2626', '#6b7280'],
+          borderWidth: 2,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '63%',
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          },
+          tooltip: {
+            callbacks: {
+              label: context =>
+                `${context.label}: ${money(context.raw)}`
+            }
+          }
+        }
+      }
+    });
+
+    destroyChart('trend');
+
+    const periods = [...new Set(
+      data.map(row => row.period).filter(Boolean)
+    )].sort();
+
+    const clouds = [...new Set(data.map(row => row.cloud))];
+
+    const trendDatasets = clouds.map((cloudName, index) => ({
+      label: cloudName.toUpperCase(),
+      data: periods.map(period =>
+        data
+          .filter(row =>
+            row.cloud === cloudName &&
+            row.period === period
+          )
+          .reduce((sum, row) => sum + row.cost, 0)
+      ),
+      borderColor: COLORS[index],
+      backgroundColor: `${COLORS[index]}22`,
+      fill: true,
+      tension: 0.3,
+      borderWidth: 2
+    }));
+
+    CHARTS.trend = new Chart($('trendChart'), {
+      type: 'line',
+      data: {
+        labels: periods,
+        datasets: trendDatasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          },
+          tooltip: {
+            callbacks: {
+              label: context =>
+                `${context.dataset.label}: ${money(context.raw)}`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: shortMoney }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+
+    createBarChart(
+      'regionChart',
+      'region',
+      region,
+      false
+    );
+  }
+
+  function createRecommendations(data) {
+    const recommendations = [];
+    const grouped = {};
+
+    data.forEach(row => {
+      const key = row.resource ||
+        `${row.cloud}|${row.account}|${row.service}|${row.resourceType}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...row,
+          cost: 0,
+          cpus: [],
+          memories: [],
+          disks: []
+        };
+      }
+
+      const resource = grouped[key];
+
+      resource.cost += Number(row.cost) || 0;
+
+      if (row.cpu != null) resource.cpus.push(row.cpu);
+      if (row.memory != null) resource.memories.push(row.memory);
+      if (row.diskUsage != null) resource.disks.push(row.diskUsage);
+
+      if (row.state) resource.state = row.state;
+      if (row.attached) resource.attached = row.attached;
+      if (row.association) resource.association = row.association;
+
+      resource.hasStateInfo ||= row.hasStateInfo;
+      resource.hasAttachedInfo ||= row.hasAttachedInfo;
+      resource.hasAssociationInfo ||= row.hasAssociationInfo;
+    });
+
+    Object.values(grouped).forEach(resource => {
+      const average = values => values.length
+        ? values.reduce((a, b) => a + b, 0) / values.length
+        : null;
+
+      const cpu = average(resource.cpus);
+      const memory = average(resource.memories);
+      const diskUsage = average(resource.disks);
+
+      const name = resource.resource ||
+        resource.service ||
+        'Recurso não identificado';
+
+      const context = [
+        resource.cloud?.toUpperCase(),
+        resource.account,
+        resource.region,
+        resource.resourceType
+      ].filter(Boolean).join(' · ');
+
+      if (cpu != null && cpu < 10) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '📉',
+          title: `CPU muito baixa: ${name}`,
+          description:
+            `${context}. CPU média de ${percentage(cpu)}. ` +
+            `Avalie redução forte, schedule ou desligamento.`,
+          saving: resource.cost * 0.50
+        });
+      } else if (cpu != null && cpu < 30) {
+        recommendations.push({
+          severity: 'warning',
+          icon: '📉',
+          title: `CPU subutilizada: ${name}`,
+          description:
+            `${context}. CPU média de ${percentage(cpu)}. ` +
+            `Avalie rightsizing para uma configuração menor.`,
+          saving: resource.cost * 0.25
+        });
+      } else if (cpu != null && cpu >= 80) {
+        recommendations.push({
+          severity: 'warning',
+          icon: '📈',
+          title: `CPU próxima do limite: ${name}`,
+          description:
+            `${context}. CPU média de ${percentage(cpu)}. ` +
+            `Avalie aumento de capacidade, auto scaling ou otimização.`,
+          saving: 0
+        });
+      }
+
+      if (memory != null && memory < 15) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '🧠',
+          title: `Memória muito subutilizada: ${name}`,
+          description:
+            `${context}. Memória média de ${percentage(memory)}. ` +
+            `Avalie uma configuração com menos memória.`,
+          saving: resource.cost * 0.35
+        });
+      } else if (memory != null && memory < 30) {
+        recommendations.push({
+          severity: 'warning',
+          icon: '🧠',
+          title: `Memória subutilizada: ${name}`,
+          description:
+            `${context}. Memória média de ${percentage(memory)}. ` +
+            `Avalie reduzir a memória provisionada.`,
+          saving: resource.cost * 0.20
+        });
+      } else if (memory != null && memory >= 85) {
+        recommendations.push({
+          severity: 'warning',
+          icon: '🧠',
+          title: `Memória próxima do limite: ${name}`,
+          description:
+            `${context}. Memória média de ${percentage(memory)}. ` +
+            `Avalie aumento de memória ou ajuste da aplicação.`,
+          saving: 0
+        });
+      }
+
+      if (diskUsage != null && diskUsage >= 85) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '💽',
+          title: `Disco próximo da capacidade: ${name}`,
+          description:
+            `${context}. Utilização de ${percentage(diskUsage)}. ` +
+            `Expanda o disco ou libere espaço.`,
+          saving: 0
+        });
+      }
+
+      const resourceText = [
+        resource.service,
+        resource.resourceType,
+        resource.resource
+      ].join(' ').toLowerCase();
+
+      const isDisk =
+        /ebs|volume|disk|managed disk|block storage|boot volume/.test(
+          resourceText
+        );
+
+      const isIP =
+        /elastic ip|public ip|reserved ip|eip/.test(resourceText);
+
+      const looseStates = [
+        'available',
+        'unattached',
+        'detached',
+        'disconnected',
+        'not attached',
+        'nao anexado',
+        'não anexado'
+      ];
+
+      const looseAttachmentValues = [
+        '',
+        'false',
+        'no',
+        'nao',
+        'não',
+        'none',
+        'unattached',
+        'detached'
+      ];
+
+      const looseDisk =
+        isDisk &&
+        (
+          (
+            resource.hasStateInfo &&
+            looseStates.includes(resource.state)
+          ) ||
+          (
+            resource.hasAttachedInfo &&
+            looseAttachmentValues.includes(resource.attached)
+          )
+        );
+
+      if (looseDisk) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '💾',
+          title: `Disco não anexado: ${name}`,
+          description:
+            `${context}. ` +
+            `${resource.storageGB != null
+              ? `Tamanho: ${resource.storageGB} GB. `
+              : ''}` +
+            `Confirme a dependência, crie snapshot e exclua o disco.`,
+          saving: resource.cost
+        });
+      }
+
+      const looseIP =
+        isIP &&
+        resource.hasAssociationInfo &&
+        !String(resource.association || '').trim();
+
+      if (looseIP) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '🌐',
+          title: `IP público sem associação: ${name}`,
+          description:
+            `${context}. Nenhuma associação foi encontrada. ` +
+            `Valide a dependência e libere o endereço.`,
+          saving: resource.cost
+        });
+      }
+    });
+
+    const total = data.reduce((sum, row) => sum + row.cost, 0);
+    const services = aggregate(data, 'service');
+
+    services.slice(0, 5).forEach(([service, cost]) => {
+      const share = total > 0 ? cost / total : 0;
+
+      if (share >= 0.35) {
+        recommendations.push({
+          severity: 'saving',
+          icon: '🔥',
+          title: `Concentração elevada em ${service}`,
+          description:
+            `${service} representa ${(share * 100).toFixed(1)}% ` +
+            `do custo filtrado. Analise recursos, SKUs, regiões e tendência.`,
+          saving: 0
+        });
+      }
+    });
+
+    const periods = [...new Set(
+      data.map(row => row.period).filter(Boolean)
+    )].sort();
+
+    if (periods.length >= 2) {
+      const currentPeriod = periods.at(-1);
+      const previousPeriod = periods.at(-2);
+
+      const currentCost = data
+        .filter(row => row.period === currentPeriod)
+        .reduce((sum, row) => sum + row.cost, 0);
+
+      const previousCost = data
+        .filter(row => row.period === previousPeriod)
+        .reduce((sum, row) => sum + row.cost, 0);
+
+      if (
+        previousCost > 0 &&
+        currentCost > previousCost * 1.25
+      ) {
+        recommendations.push({
+          severity: 'critical',
+          icon: '🚨',
+          title: `Aumento relevante em ${currentPeriod}`,
+          description:
+            `O custo passou de ${money(previousCost)} para ` +
+            `${money(currentCost)}, aumento de ` +
+            `${(((currentCost / previousCost) - 1) * 100).toFixed(1)}%.`,
+          saving: 0
+        });
+      }
+    }
+
+    return recommendations.sort((a, b) =>
+      (b.saving || 0) - (a.saving || 0)
+    );
+  }
+
+  function renderRecommendations(data) {
+    const recommendations = createRecommendations(data);
+    const saving = recommendations.reduce(
+      (sum, recommendation) =>
+        sum + (recommendation.saving || 0),
+      0
+    );
+
+    if (!recommendations.length) {
+      $('recommendationsList').innerHTML = `
+        <div class="card">
+          <div class="empty">
+            Nenhuma recomendação foi gerada com os dados disponíveis.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    $('recommendationsList').innerHTML = `
+      ${saving > 0 ? `
+        <div class="rec-summary">
+          <div style="font-size:30px">💰</div>
+          <div>
+            <div style="color:var(--green);font-size:12px;font-weight:700">
+              Economia potencial estimada
+            </div>
+            <strong>${money(saving)}/mês</strong>
+          </div>
+        </div>
+      ` : ''}
+
+      ${recommendations.map(recommendation => `
+        <div class="recommendation ${recommendation.severity}">
+          <div class="recommendation-title">
+            ${recommendation.icon}
+            ${html(recommendation.title)}
+          </div>
+
+          <div class="recommendation-description">
+            ${html(recommendation.description)}
+          </div>
+
+          ${recommendation.saving > 0 ? `
+            <div class="recommendation-saving">
+              Economia estimada:
+              ${money(recommendation.saving)}/mês
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function metricBar(number, type) {
+    if (number == null) return '—';
+
+    let color = 'var(--green)';
+
+    if (type === 'capacity') {
+      if (number >= 85) color = 'var(--red)';
+      else if (number >= 70) color = 'var(--yellow)';
+    } else {
+      if (number < 10 || number >= 85) color = 'var(--red)';
+      else if (number < 30 || number >= 70) color = 'var(--yellow)';
+    }
+
+    return `
+      <span class="bar">
+        <span style="width:${Math.min(100, number)}%;background:${color}"></span>
+      </span>
+      ${percentage(number)}
+    `;
+  }
+
+  function renderOffenders(data) {
+    const hasResources = data.some(row => row.resource);
+
+    const field = hasResources ? 'resource' : 'service';
+    const ranking = aggregate(
+      data.filter(row => field === 'service' || row.resource),
+      field
+    ).slice(0, 50);
+
+    const total = data.reduce((sum, row) => sum + row.cost, 0);
+
+    $('offendersTable').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>${hasResources ? 'Recurso' : 'Serviço'}</th>
+            <th>Custo</th>
+            <th>% do total</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${ranking.map(([name, cost], index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td title="${html(name)}">${html(name)}</td>
+              <td><strong>${money(cost)}</strong></td>
+              <td>
+                ${total > 0
+                  ? `${((cost / total) * 100).toFixed(2)}%`
+                  : '0%'}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderDetails(data) {
+    const sorted = [...data]
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 500);
+
+    $('detailsTable').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Cloud</th>
+            <th>Período</th>
+            <th>Conta</th>
+            <th>Serviço</th>
+            <th>Recurso</th>
+            <th>Tipo</th>
+            <th>Região</th>
+            <th>Custo</th>
+            <th>CPU</th>
+            <th>Memória</th>
+            <th>Disco</th>
+            <th>Arquivo</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${sorted.map(row => `
+            <tr>
+              <td>
+                <span class="badge ${html(row.cloud)}">
+                  ${html(row.cloud.toUpperCase())}
+                </span>
+              </td>
+
+              <td>${html(row.period || '—')}</td>
+              <td title="${html(row.account)}">${html(row.account)}</td>
+              <td title="${html(row.service)}">${html(row.service)}</td>
+              <td title="${html(row.resource)}">${html(row.resource || '—')}</td>
+              <td title="${html(row.resourceType)}">${html(row.resourceType || '—')}</td>
+              <td>${html(row.region)}</td>
+              <td><strong>${money(row.cost, row.currency)}</strong></td>
+              <td>${metricBar(row.cpu, 'utilization')}</td>
+              <td>${metricBar(row.memory, 'utilization')}</td>
+              <td>${metricBar(row.diskUsage, 'capacity')}</td>
+              <td title="${html(row.sourceFile)}">${html(row.sourceFile)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderAll() {
+    const data = filteredData();
+
+    renderKPIs(data);
+    renderCharts(data);
+    renderOffenders(data);
+    renderRecommendations(data);
+    renderDetails(data);
+  }
+
+  function openTab(name, button) {
+    document
+      .querySelectorAll('.tab')
+      .forEach(item => item.classList.remove('active'));
+
+    document
+      .querySelectorAll('.tab-content')
+      .forEach(item => item.classList.remove('active'));
+
+    button.classList.add('active');
+    $(`tab-${name}`).classList.add('active');
+
+    if (name === 'overview') {
+      setTimeout(() => renderCharts(filteredData()), 20);
+    }
+  }
+
+  function chooseMoreFiles() {
+    $('fileInput').click();
+  }
+
+  function resetDashboard() {
+    DATA = [];
+    FILE_NAMES = [];
+
+    Object.values(CHARTS).forEach(chart => chart?.destroy());
+    CHARTS = {};
+
+    $('fileInput').value = '';
+    $('dashboard').hidden = true;
+    $('headerActions').hidden = true;
+    $('uploadSection').hidden = false;
+
+    showMessage('');
+  }
+
+  function exportCSV() {
+    const data = filteredData();
+
+    if (!data.length) return;
+
+    const exportRows = data.map(row => ({
+      cloud: row.cloud,
+      periodo: row.period,
+      data: row.date,
+      conta_subscription: row.account,
+      servico: row.service,
+      recurso: row.resource,
+      tipo_recurso: row.resourceType,
+      regiao: row.region,
+      custo: row.cost,
+      moeda: row.currency,
+      cpu_media: row.cpu,
+      memoria_media: row.memory,
+      disco_utilizacao: row.diskUsage,
+      estado: row.state,
+      associado_a: row.association,
+      arquivo_origem: row.sourceFile,
+      aba_origem: row.sourceSheet
+    }));
+
+    const csv = Papa.unparse(exportRows, {
+      delimiter: ';'
+    });
+
+    const blob = new Blob(
+      [`\uFEFF${csv}`],
+      { type: 'text/csv;charset=utf-8' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = 'cloud_finops_consolidado.csv';
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  $('fileInput').addEventListener('change', event => {
+    processFiles(event.target.files);
+    event.target.value = '';
+  });
+
+  const dropzone = $('dropzone');
+
+  dropzone.addEventListener('dragover', event => {
+    event.preventDefault();
+    dropzone.classList.add('over');
+  });
+
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('over');
+  });
+
+  dropzone.addEventListener('drop', event => {
+    event.preventDefault();
+    dropzone.classList.remove('over');
+    processFiles(event.dataTransfer.files);
+  });
+
+  Chart.defaults.font.family = 'Arial, Helvetica, sans-serif';
+  Chart.defaults.color = '#6b7280';
+</script>
+</body>
+</html>
